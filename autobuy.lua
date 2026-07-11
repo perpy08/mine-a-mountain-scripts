@@ -185,10 +185,15 @@ createButton("TELEPORT TO SPAWN", 205, function()
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
         if spawn then
-            -- Tweening moves character smoothly to avoid server anti-cheat
-            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
-            local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
-            tween:Play()
+            local root = char.HumanoidRootPart
+            local targetPos = spawn.CFrame.Position + Vector3.new(0, 3, 0)
+            local currentPos = root.Position
+            
+            -- Move in 5 small steps to prevent anti-cheat trigger
+            for i = 1, 5 do
+                root.CFrame = CFrame.new(currentPos:Lerp(targetPos, i / 5))
+                task.wait(0.02)
+            end
         end
     end
 end)
