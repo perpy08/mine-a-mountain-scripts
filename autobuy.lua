@@ -19,6 +19,8 @@ local ProfileSettings = {
     NoRagdollActive = false,
     NoDamageActive = false,
     PlayerESPActive = false,
+    CrystalESPActive = false,
+    SelectedRarity = "None",
     CurrentSpeedMultiplier = 1.0
 }
 
@@ -26,7 +28,7 @@ local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. ESP LOGIC
+--  1. ESP LOGIC (Integrated Crystal ESP)
 -- ---------------------------------------------------------------------
 
 local function createESP(player)
@@ -69,6 +71,21 @@ RunService.RenderStepped:Connect(function()
         if p.Character and p.Character:FindFirstChild("PlayerHighlight") then
             p.Character.PlayerHighlight.Enabled = ProfileSettings.PlayerESPActive
             p.Character.HumanoidRootPart:FindFirstChild("PlayerLabel").Enabled = ProfileSettings.PlayerESPActive
+        end
+    end
+
+    if ProfileSettings.CrystalESPActive then
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:GetAttribute("Rarity") == ProfileSettings.SelectedRarity then
+                if not obj:FindFirstChild("CrystalHighlight") then
+                    local h = Instance.new("Highlight", obj)
+                    h.Name = "CrystalHighlight"
+                    h.FillColor = Color3.fromRGB(0, 255, 255)
+                end
+                obj.CrystalHighlight.Enabled = true
+            elseif obj:IsA("Model") and obj:FindFirstChild("CrystalHighlight") then
+                obj.CrystalHighlight.Enabled = false
+            end
         end
     end
 end)
@@ -191,7 +208,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 485)
+MainFrame.Size = UDim2.new(0, 240, 0, 545) -- Increased size for dropdown
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
@@ -231,6 +248,30 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
+-- Rarity Dropdown Logic
+local DropdownFrame = Instance.new("Frame", MainFrame)
+DropdownFrame.Size = UDim2.new(0.9, 0, 0, 35); DropdownFrame.Position = UDim2.new(0.05, 0, 0, 355)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40); DropdownFrame.BackgroundTransparency = 1
+local RarityBtn = Instance.new("TextButton", DropdownFrame)
+RarityBtn.Size = UDim2.new(1, 0, 1, 0); RarityBtn.Text = "Select Rarity"
+RarityBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); RarityBtn.Parent = DropdownFrame
+RarityBtn.MouseButton1Click:Connect(function() for _, c in pairs(DropdownFrame:GetChildren()) do if c:IsA("TextButton") and c ~= RarityBtn then c.Visible = not c.Visible end end end)
+
+for _, r in ipairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"}) do
+    local opt = Instance.new("TextButton", DropdownFrame)
+    opt.Size = UDim2.new(1, 0, 0, 30); opt.Position = UDim2.new(0, 0, 1, (#DropdownFrame:GetChildren()-2)*30)
+    opt.Text = r; opt.Visible = false; opt.BackgroundColor3 = Color3.fromRGB(60, 60, 60); opt.Parent = DropdownFrame
+    opt.MouseButton1Click:Connect(function() ProfileSettings.SelectedRarity = r; RarityBtn.Text = "Rarity: " .. r; for _, c in pairs(DropdownFrame:GetChildren()) do if c ~= RarityBtn then c.Visible = false end end end)
+end
+
+createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s end)
+createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
+createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
+createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
+createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end)
+createToggle("Player ESP", 305, function(s) ProfileSettings.PlayerESPActive = s end)
+createToggle("Crystal ESP", 400, function(s) ProfileSettings.CrystalESPActive = s end)
+
 local function createButton(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -243,14 +284,7 @@ local function createButton(name, positionY, callback)
     Button.MouseButton1Click:Connect(callback)
 end
 
-createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s end)
-createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
-createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
-createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
-createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end)
-createToggle("Player ESP", 305, function(s) ProfileSettings.PlayerESPActive = s end)
-
-createButton("TELEPORT TO SPAWN", 355, function()
+createButton("TELEPORT TO SPAWN", 450, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
@@ -266,7 +300,7 @@ end)
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 410)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 500)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
