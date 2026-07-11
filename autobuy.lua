@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService") -- Added for anti-rubberband
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
@@ -26,13 +27,10 @@ local jumpCount = 0
 -- ---------------------------------------------------------------------
 
 local BUY_BOMB_REMOTE = nil
-local SELL_REMOTE = nil
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-    -- Identify Sell Remote (Change name here based on F9 Console)
-    SELL_REMOTE = remotesFolder:FindFirstChild("Sell") or remotesFolder:FindFirstChild("SellCrystals")
 end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
@@ -121,7 +119,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 400)
+MainFrame.Size = UDim2.new(0, 240, 0, 365)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
@@ -141,9 +139,7 @@ HeaderLabel.Font = Enum.Font.SourceSansBold
 HeaderLabel.TextSize = 14
 HeaderLabel.Parent = MainFrame
 
-local HeaderCorner = Instance.new("UICorner")
-HeaderCorner.CornerRadius = UDim.new(0, 8)
-HeaderCorner.Parent = HeaderLabel
+Instance.new("UICorner", HeaderLabel).CornerRadius = UDim.new(0, 8)
 
 local function createToggle(name, positionY, callback)
     local Button = Instance.new("TextButton")
@@ -167,7 +163,7 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
--- Feature Buttons
+-- Teleport Button (Anti-Rubberband)
 local function createButton(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -184,17 +180,16 @@ createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s
 createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
 
-createButton("SELL CRYSTALS", 205, function()
-    if SELL_REMOTE then
-        if SELL_REMOTE:IsA("RemoteFunction") then SELL_REMOTE:InvokeServer() else SELL_REMOTE:FireServer() end
-    end
-end)
-
-createButton("TELEPORT TO SPAWN", 255, function()
+createButton("TELEPORT TO SPAWN", 205, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
-        if spawn then char.HumanoidRootPart.CFrame = spawn.CFrame + Vector3.new(0, 3, 0) end
+        if spawn then
+            -- Tweening moves character smoothly to avoid server anti-cheat
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
+            local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
+            tween:Play()
+        end
     end
 end)
 
@@ -204,7 +199,7 @@ end)
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 305)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 260)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
