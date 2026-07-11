@@ -182,7 +182,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 -- ---------------------------------------------------------------------
---  3. GRAPHICAL USER INTERFACE (Scrollable)
+--  3. GRAPHICAL USER INTERFACE (ScrollingFrame Fix)
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -199,6 +199,7 @@ MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
+-- Scrollable Container
 local ScrollFrame = Instance.new("ScrollingFrame", MainFrame)
 ScrollFrame.Size = UDim2.new(1, 0, 1, -40)
 ScrollFrame.Position = UDim2.new(0, 0, 0, 40)
@@ -250,6 +251,7 @@ local function createButton(name, positionY, callback)
     Button.MouseButton1Click:Connect(callback)
 end
 
+-- Original Toggles
 createToggle("Auto Buy Bombs", 10, function(s) ProfileSettings.AutoBuyActive = s end)
 createToggle("Instant E-Mining", 60, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 110, function(s) ProfileSettings.MultiJumpActive = s end)
@@ -268,7 +270,7 @@ createButton("TELEPORT TO SPAWN", 310, function()
 end)
 
 -- ---------------------------------------------------------------------
---  4. SLIDER ELEMENT
+--  4. SLIDER ELEMENT (Restored)
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
