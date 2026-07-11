@@ -1,16 +1,14 @@
 -- =====================================================================
---  MINE A MOUNTAIN: ADVANCED AUTOMATION PANEL
+--  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL
 -- =====================================================================
 
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 -- Main State Flags
 local ProfileSettings = {
@@ -21,18 +19,16 @@ local ProfileSettings = {
     CurrentSpeedMultiplier = 1.0
 }
 
--- Multi-Jump Tracking Variables
 local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. AUTOMATION FUNCTIONAL LOOPS
+--  1. AUTOMATION LOOPS & REMOTES
 -- ---------------------------------------------------------------------
 
--- Safe Remote Discovery
 local BUY_BOMB_REMOTE = nil
 local MINE_REMOTE = nil
-local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5) or ReplicatedStorage:WaitForChild("Events", 5) or ReplicatedStorage
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
@@ -60,17 +56,15 @@ task.spawn(function()
     end
 end)
 
--- Absolute Instant Mining
 ProximityPromptService.PromptShown:Connect(function(prompt)
     if ProfileSettings.InstantInteractions then
         prompt.HoldDuration = 0
     end
 end)
 
--- Smart Conditional Crystal Hitting Loop
 task.spawn(function()
     while true do
-        if ProfileSettings.FastHitting then
+        if ProfileSettings.FastHitting and Mouse then
             pcall(function()
                 local target = Mouse.Target
                 if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
@@ -93,13 +87,11 @@ task.spawn(function()
     end
 end)
 
--- Multi-Jump and Anti-Reset Speed Enforcer
 local function ManageCharacter(character)
     local humanoid = character:WaitForChild("Humanoid", 5)
     local rootPart = character:WaitForChild("HumanoidRootPart", 5)
     if not humanoid or not rootPart then return end
     
-    -- Speed Enforcer Connection
     local speedConnection
     speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         local expectedSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
@@ -109,7 +101,6 @@ local function ManageCharacter(character)
     end)
     humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
     
-    -- Reset jump tracking when landing on solid ground
     local stateConnection
     stateConnection = humanoid.StateChanged:Connect(function(_, newState)
         if newState == Enum.HumanoidStateType.Landed then
@@ -123,13 +114,11 @@ local function ManageCharacter(character)
     end)
 end
 
-if LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(ManageCharacter)
+if LocalPlayer and LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
+if LocalPlayer then LocalPlayer.CharacterAdded:Connect(ManageCharacter) end
 
--- Monitor Spacebar Input for Mid-Air Multi-Jumps (Verified Line)
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
-    
     if input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
         local character = LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -148,15 +137,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 -- ---------------------------------------------------------------------
---  2. GRAPHICAL USER INTERFACE
+--  2. GRAPHICAL USER INTERFACE (SAFE PLAYERGUI HOOK)
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MineAMountainPanel"
 ScreenGui.ResetOnSpawn = false
-
-local success, err = pcall(function() ScreenGui.Parent = CoreGui end)
-if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 240, 0, 310)
@@ -214,24 +201,13 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
-createToggle("Auto Buy Bombs", 55, function(state)
-    ProfileSettings.AutoBuyActive = state
-end)
-
-createToggle("Instant E-Mining", 105, function(state)
-    ProfileSettings.InstantInteractions = state
-end)
-
-createToggle("Smart Fast Hitting", 155, function(state)
-    ProfileSettings.FastHitting = state
-end)
-
-createToggle("Infinite Multi-Jump", 205, function(state)
-    ProfileSettings.MultiJumpActive = state
-end)
+createToggle("Auto Buy Bombs", 55, function(state) ProfileSettings.AutoBuyActive = state end)
+createToggle("Instant E-Mining", 105, function(state) ProfileSettings.InstantInteractions = state end)
+createToggle("Smart Fast Hitting", 155, function(state) ProfileSettings.FastHitting = state end)
+createToggle("Infinite Multi-Jump", 205, function(state) ProfileSettings.MultiJumpActive = state end)
 
 -- ---------------------------------------------------------------------
---  3. SLIDER ELEMENT (5.0x SPEED MAX)
+--  3. SLIDER ELEMENT
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
@@ -312,10 +288,6 @@ UserInputService.InputEnded:Connect(function(input)
         isDragging = false
     end
 end)
-
--- ---------------------------------------------------------------------
---  4. USER INPUT WINDOW ACCESSIBILITY LAYER
--- ---------------------------------------------------------------------
 
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Insert then
