@@ -6,10 +6,11 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local TweenService = game:GetService("TweenService") 
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 -- Main State Flags
 local ProfileSettings = {
@@ -37,6 +38,7 @@ end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
 
+-- Automation Loop
 task.spawn(function()
     while true do
         if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
@@ -56,6 +58,7 @@ task.spawn(function()
     end
 end)
 
+-- UI-Friendly Healing (No Damage Logic)
 RunService.Heartbeat:Connect(function()
     if ProfileSettings.NoDamageActive then
         local char = LocalPlayer.Character
@@ -63,6 +66,12 @@ RunService.Heartbeat:Connect(function()
         if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
             hum.Health = hum.MaxHealth
         end
+    end
+end)
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+    if ProfileSettings.InstantInteractions then
+        prompt.HoldDuration = 0
     end
 end)
 
@@ -107,6 +116,25 @@ end
 if LocalPlayer and LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
 if LocalPlayer then LocalPlayer.CharacterAdded:Connect(ManageCharacter) end
 
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    if input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid and rootPart then
+            local state = humanoid:GetState()
+            if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+                if jumpCount < maxBonusJumps then
+                    jumpCount = jumpCount + 1
+                    rootPart.Velocity = Vector3.new(rootPart.Velocity.X, humanoid.JumpPower, rootPart.Velocity.Z)
+                end
+            end
+        end
+    end
+end)
+
 -- ---------------------------------------------------------------------
 --  2. GRAPHICAL USER INTERFACE
 -- ---------------------------------------------------------------------
@@ -123,7 +151,10 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
 MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 8)
+FrameCorner.Parent = MainFrame
 
 local HeaderLabel = Instance.new("TextLabel")
 HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
@@ -133,6 +164,7 @@ HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 HeaderLabel.Font = Enum.Font.SourceSansBold
 HeaderLabel.TextSize = 14
 HeaderLabel.Parent = MainFrame
+
 Instance.new("UICorner", HeaderLabel).CornerRadius = UDim.new(0, 8)
 
 local function createToggle(name, positionY, callback)
@@ -157,32 +189,38 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
+local function createButton(name, positionY, callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0.9, 0, 0, 35)
+    Button.Position = UDim2.new(0.05, 0, 0, positionY)
+    Button.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
+    Button.Text = name
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Parent = MainFrame
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 4)
+    Button.MouseButton1Click:Connect(callback)
+end
+
 createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s end)
 createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
 createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
 createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end)
 
-local TeleportButton = Instance.new("TextButton")
-TeleportButton.Size = UDim2.new(0.9, 0, 0, 35)
-TeleportButton.Position = UDim2.new(0.05, 0, 0, 305)
-TeleportButton.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
-TeleportButton.Text = "TELEPORT TO SPAWN"
-TeleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-TeleportButton.Parent = MainFrame
-Instance.new("UICorner", TeleportButton).CornerRadius = UDim.new(0, 4)
-TeleportButton.MouseButton1Click:Connect(function()
+createButton("TELEPORT TO SPAWN", 305, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
         if spawn then
-            TweenService:Create(char.HumanoidRootPart, TweenInfo.new(0.5), {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)}):Play()
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
+            local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
+            tween:Play()
         end
     end
 end)
 
 -- ---------------------------------------------------------------------
---  3. SLIDER ELEMENT (RESTORED)
+--  3. SLIDER ELEMENT
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
