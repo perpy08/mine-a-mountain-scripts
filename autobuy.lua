@@ -126,7 +126,7 @@ end
 if LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(ManageCharacter)
 
--- Monitor Spacebar Input for Mid-Air Multi-Jumps (Fixed Syntax Error Here)
+-- Monitor Spacebar Input for Mid-Air Multi-Jumps (Verified Line)
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
     
