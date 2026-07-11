@@ -1,5 +1,5 @@
 -- =====================================================================
---  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL
+--  MINE A MOUNTAIN: ULTIMATE AUTOMATION & MAGNET PANEL
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -10,13 +10,19 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
--- Main State Flags
+-- Main State Flags & Configurations
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
     FastHitting = false,
     MultiJumpActive = false,
-    CurrentSpeedMultiplier = 1.0
+    CurrentSpeedMultiplier = 1.0,
+    
+    -- Magnet Settings
+    MagnetActive = false,
+    SelectedRarity = "All",
+    PullCount = 10,
+    PullRadius = 50
 }
 
 local maxBonusJumps = 10
@@ -87,6 +93,51 @@ task.spawn(function()
     end
 end)
 
+-- ---------------------------------------------------------------------
+--  2. CRYSTAL MAGNET ENGINE (MANUAL TRIGGER)
+-- ---------------------------------------------------------------------
+local function TriggerCrystalMagnet()
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local pulled = 0
+    local targetRarity = ProfileSettings.SelectedRarity:lower()
+
+    -- Scans the Workspace safely for items matching parameters
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if pulled >= ProfileSettings.PullCount then break end
+
+        -- Checks if the object is named crystal or part of a crystal model
+        local isCrystal = obj:IsA("BasePart") and (obj.Name:lower():find("crystal") or (obj.Parent and obj.Parent.Name:lower():find("crystal")))
+        
+        if isCrystal and obj.CanCollide == true then 
+            -- Distance Check
+            local distance = (obj.Position - rootPart.Position).Magnitude
+            if distance <= ProfileSettings.PullRadius then
+                
+                -- Rarity Filtering (looks at name or container names)
+                local matchesRarity = false
+                if targetRarity == "all" then
+                    matchesRarity = true
+                else
+                    if obj.Name:lower():find(targetRarity) or (obj.Parent and obj.Parent.Name:lower():find(targetRarity)) then
+                        matchesRarity = true
+                    end
+                end
+
+                if matchesRarity then
+                    pulled = pulled + 1
+                    -- Snaps crystal parts straight to your feet safely
+                    pcall(function()
+                        obj.CFrame = rootPart.CFrame * CFrame.new(0, -2, -2)
+                    end)
+                end
+            end
+        end
+    end
+end
+
 local function ManageCharacter(character)
     local humanoid = character:WaitForChild("Humanoid", 5)
     local rootPart = character:WaitForChild("HumanoidRootPart", 5)
@@ -137,7 +188,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 -- ---------------------------------------------------------------------
---  2. GRAPHICAL USER INTERFACE (SAFE PLAYERGUI HOOK)
+--  3. GRAPHICAL USER INTERFACE (EXPANDED FOR MAGNET)
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -145,10 +196,11 @@ ScreenGui.Name = "MineAMountainPanel"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+-- Expanded Window height to 520px to hold the new settings layout
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 310)
-MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Size = UDim2.new(0, 250, 0, 520)
+MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 MainFrame.Active = true
 MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
@@ -159,8 +211,8 @@ FrameCorner.Parent = MainFrame
 
 local HeaderLabel = Instance.new("TextLabel")
 HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
-HeaderLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-HeaderLabel.Text = "Mine A Mountain"
+HeaderLabel.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+HeaderLabel.Text = "Mine A Mountain Hub"
 HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 HeaderLabel.Font = Enum.Font.SourceSansBold
 HeaderLabel.TextSize = 14
@@ -172,13 +224,13 @@ HeaderCorner.Parent = HeaderLabel
 
 local function createToggle(name, positionY, callback)
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0.9, 0, 0, 35)
+    Button.Size = UDim2.new(0.9, 0, 0, 30)
     Button.Position = UDim2.new(0.05, 0, 0, positionY)
-    Button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    Button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     Button.Text = name .. ": OFF"
     Button.TextColor3 = Color3.fromRGB(220, 80, 80)
     Button.Font = Enum.Font.SourceSans
-    Button.TextSize = 14
+    Button.TextSize = 13
     Button.Parent = MainFrame
 
     local Corner = Instance.new("UICorner")
@@ -189,37 +241,198 @@ local function createToggle(name, positionY, callback)
     Button.MouseButton1Click:Connect(function()
         toggled = not toggled
         if toggled then
-            Button.BackgroundColor3 = Color3.fromRGB(60, 110, 60)
+            Button.BackgroundColor3 = Color3.fromRGB(50, 100, 50)
             Button.TextColor3 = Color3.fromRGB(255, 255, 255)
             Button.Text = name .. ": ON"
         else
-            Button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            Button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
             Button.TextColor3 = Color3.fromRGB(220, 80, 80)
             Button.Text = name .. ": OFF"
         end
         callback(toggled)
     end)
+    return Button
 end
 
-createToggle("Auto Buy Bombs", 55, function(state) ProfileSettings.AutoBuyActive = state end)
-createToggle("Instant E-Mining", 105, function(state) ProfileSettings.InstantInteractions = state end)
-createToggle("Smart Fast Hitting", 155, function(state) ProfileSettings.FastHitting = state end)
-createToggle("Infinite Multi-Jump", 205, function(state) ProfileSettings.MultiJumpActive = state end)
+createToggle("Auto Buy Bombs", 45, function(state) ProfileSettings.AutoBuyActive = state end)
+createToggle("Instant E-Mining", 80, function(state) ProfileSettings.InstantInteractions = state end)
+createToggle("Smart Fast Hitting", 115, function(state) ProfileSettings.FastHitting = state end)
+createToggle("Infinite Multi-Jump", 150, function(state) ProfileSettings.MultiJumpActive = state end)
 
 -- ---------------------------------------------------------------------
---  3. SLIDER ELEMENT
+--  4. MAGNET PANEL SUBSECTION (CONDITIONAL VISIBILITY)
+-- ---------------------------------------------------------------------
+local MagnetContainer = Instance.new("Frame")
+MagnetContainer.Size = UDim2.new(0.9, 0, 0, 190)
+MagnetContainer.Position = UDim2.new(0.05, 0, 0, 225)
+MagnetContainer.BackgroundTransparency = 1
+MagnetContainer.Visible = false
+MagnetContainer.Parent = MainFrame
+
+-- Rarity Dropdown Elements
+local DropdownButton = Instance.new("TextButton")
+DropdownButton.Size = UDim2.new(1, 0, 0, 30)
+DropdownButton.Position = UDim2.new(0, 0, 0, 0)
+DropdownButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+DropdownButton.Text = "Rarity: All"
+DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownButton.Font = Enum.Font.SourceSans
+DropdownButton.TextSize = 13
+DropdownButton.Parent = MagnetContainer
+
+local DropdownList = Instance.new("Frame")
+DropdownList.Size = UDim2.new(1, 0, 0, 120)
+DropdownList.Position = UDim2.new(0, 0, 0, 32)
+DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+DropdownList.Visible = false
+DropdownList.ZIndex = 5
+DropdownList.Parent = MagnetContainer
+
+local rarities = {"All", "Common", "Rare", "Epic", "Legendary", "Mythic"}
+for i, rarityName in ipairs(rarities) do
+    local RarityBtn = Instance.new("TextButton")
+    RarityBtn.Size = UDim2.new(1, 0, 0, 20)
+    RarityBtn.Position = UDim2.new(0, 0, 0, (i-1)*20)
+    RarityBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    RarityBtn.Text = rarityName
+    RarityBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    RarityBtn.Font = Enum.Font.SourceSans
+    RarityBtn.TextSize = 12
+    RarityBtn.ZIndex = 6
+    RarityBtn.Parent = DropdownList
+
+    RarityBtn.MouseButton1Click:Connect(function()
+        ProfileSettings.SelectedRarity = rarityName
+        DropdownButton.Text = "Rarity: " .. rarityName
+        DropdownList.Visible = false
+    end)
+end
+
+DropdownButton.MouseButton1Click:Connect(function()
+    DropdownList.Visible = not DropdownList.Visible
+end)
+
+-- Limit Number Input Box
+local InputLabel = Instance.new("TextLabel")
+InputLabel.Size = UDim2.new(0.6, 0, 0, 30)
+InputLabel.Position = UDim2.new(0, 0, 0, 40)
+InputLabel.BackgroundTransparency = 1
+InputLabel.Text = "Pull Count Limit:"
+InputLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+InputLabel.Font = Enum.Font.SourceSans
+InputLabel.TextSize = 13
+InputLabel.TextXAlignment = Enum.TextXAlignment.Left
+InputLabel.Parent = MagnetContainer
+
+local TextBox = Instance.new("TextBox")
+TextBox.Size = UDim2.new(0.35, 0, 0, 25)
+TextBox.Position = UDim2.new(0.65, 0, 0, 42)
+TextBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TextBox.Text = "10"
+TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextBox.Font = Enum.Font.SourceSans
+TextBox.TextSize = 13
+TextBox.Parent = MagnetContainer
+
+TextBox.FocusLost:Connect(function()
+    local num = tonumber(TextBox.Text)
+    if num then
+        ProfileSettings.PullCount = math.clamp(math.floor(num), 1, 100)
+        TextBox.Text = tostring(ProfileSettings.PullCount)
+    else
+        TextBox.Text = tostring(ProfileSettings.PullCount)
+    end
+end)
+
+-- Magnet Radius Slider Track
+local MagSliderTrack = Instance.new("Frame")
+MagSliderTrack.Size = UDim2.new(1, 0, 0, 6)
+MagSliderTrack.Position = UDim2.new(0, 0, 0, 95)
+MagSliderTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+MagSliderTrack.Parent = MagnetContainer
+
+local MagSliderLabel = Instance.new("TextLabel")
+MagSliderLabel.Size = UDim2.new(1, 0, 0, 15)
+MagSliderLabel.Position = UDim2.new(0, 0, 0, 75)
+MagSliderLabel.BackgroundTransparency = 1
+MagSliderLabel.Text = "Scan Radius: 50 studs"
+MagSliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+MagSliderLabel.Font = Enum.Font.SourceSans
+MagSliderLabel.TextSize = 12
+MagSliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+MagSliderLabel.Parent = MagnetContainer
+
+local MagSliderBtn = Instance.new("TextButton")
+MagSliderBtn.Size = UDim2.new(0, 12, 0, 12)
+MagSliderBtn.Position = UDim2.new(0.2, -6, 0.5, -6)
+MagSliderBtn.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+MagSliderBtn.Text = ""
+MagSliderBtn.Parent = MagSliderTrack
+
+local magDragging = false
+MagSliderBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        magDragging = true
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if magDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local relativeX = input.Position.X - MagSliderTrack.AbsolutePosition.X
+        local pct = math.clamp(relativeX / MagSliderTrack.AbsoluteSize.X, 0, 1)
+        local radiusVal = math.floor(10 + (pct * 240)) -- Scale radius up to 250 studs max
+        
+        MagSliderBtn.Position = UDim2.new(pct, -6, 0.5, -6)
+        MagSliderLabel.Text = "Scan Radius: " .. radiusVal .. " studs"
+        ProfileSettings.PullRadius = radiusVal
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        magDragging = false
+    end
+end)
+
+-- Action Pull Executer Trigger
+local PullActionBtn = Instance.new("TextButton")
+PullActionBtn.Size = UDim2.new(1, 0, 0, 35)
+PullActionBtn.Position = UDim2.new(0, 0, 0, 120)
+PullActionBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 100)
+PullActionBtn.Text = "✨ PULL CRYSTALS ✨"
+PullActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PullActionBtn.Font = Enum.Font.SourceSansBold
+PullActionBtn.TextSize = 13
+PullActionBtn.Parent = MagnetContainer
+
+local PullCorner = Instance.new("UICorner")
+PullCorner.CornerRadius = UDim.new(0, 4)
+PullCorner.Parent = PullActionBtn
+
+PullActionBtn.MouseButton1Click:Connect(function()
+    TriggerCrystalMagnet()
+end)
+
+-- Main Toggle that shows/hides options block completely
+createToggle("Crystal Magnet System", 185, function(state)
+    ProfileSettings.MagnetActive = state
+    MagnetContainer.Visible = state
+end)
+
+-- ---------------------------------------------------------------------
+--  5. SPEED MULTIPLIER SLIDER ELEMENT
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 250)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 455)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
 local SliderLabel = Instance.new("TextLabel")
 SliderLabel.Size = UDim2.new(1, 0, 0, 20)
 SliderLabel.BackgroundTransparency = 1
-SliderLabel.Text = "Speed Multiplier: 1.0x"
+SliderLabel.Text = "WalkSpeed Multiplier: 1.0x"
 SliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 SliderLabel.Font = Enum.Font.SourceSans
 SliderLabel.TextSize = 13
@@ -260,7 +473,7 @@ local function updateSlider(input)
     local finalPercentage = (snapValue - 1.0) / 4.0
     
     SliderButton.Position = UDim2.new(finalPercentage, -7, 0.5, -7)
-    SliderLabel.Text = "Speed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
+    SliderLabel.Text = "WalkSpeed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
     ProfileSettings.CurrentSpeedMultiplier = snapValue
     
     pcall(function()
