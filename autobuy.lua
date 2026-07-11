@@ -1,5 +1,5 @@
 -- =====================================================================
---  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL (FIXED V5)
+--  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL (FIXED V6)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -17,13 +17,32 @@ local ProfileSettings = {
     SpeedValue = 16
 }
 
-local jumpCount = 0
+-- 1. GUI SETUP (Explicit parenting)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MineAMountainPanel"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- ---------------------------------------------------------------------
---  1. CORE LOGIC
--- ---------------------------------------------------------------------
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 260, 0, 300)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Ragdoll Prevention
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "AUTOMATION PANEL"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.Bold
+Title.TextSize = 18
+Title.BackgroundTransparency = 1
+
+-- 2. LOGIC
 RunService.RenderStepped:Connect(function()
     if ProfileSettings.NoRagdollActive and LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -34,52 +53,17 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Multi-Jump
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe or input.KeyCode ~= Enum.KeyCode.Space or not ProfileSettings.MultiJumpActive then return end
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum and (hum:GetState() == Enum.HumanoidStateType.Freefall or hum:GetState() == Enum.HumanoidStateType.Jumping) then
-        if jumpCount < 10 then
-            jumpCount += 1
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Humanoid").StateChanged:Connect(function(_, state)
-        if state == Enum.HumanoidStateType.Landed then jumpCount = 0 end
-    end)
-end)
-
--- ---------------------------------------------------------------------
---  2. IMPROVED GUI
--- ---------------------------------------------------------------------
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 260, 0, 300)
-MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-MainFrame.Active = true
-MainFrame.Draggable = true
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
-
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "AUTOMATION PANEL"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.Bold
-Title.TextSize = 18
-Title.BackgroundTransparency = 1
-
+-- 3. COMPONENTS
 local function createToggle(name, yPos, callback)
-    local btn = Instance.new("TextButton", MainFrame)
+    local btn = Instance.new("TextButton")
+    btn.Parent = MainFrame
     btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = UDim2.new(0.05, 0, 0, yPos)
     btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Text = name .. ": OFF"
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    
     local on = false
     btn.MouseButton1Click:Connect(function()
         on = not on
@@ -94,7 +78,7 @@ createToggle("Instant Mine", 95, function(s) ProfileSettings.InstantInteractions
 createToggle("No Ragdoll", 140, function(s) ProfileSettings.NoRagdollActive = s end)
 createToggle("Multi-Jump", 185, function(s) ProfileSettings.MultiJumpActive = s end)
 
--- Fixed Slider
+-- Speed Slider
 local SpeedLabel = Instance.new("TextLabel", MainFrame)
 SpeedLabel.Size = UDim2.new(0.9, 0, 0, 20)
 SpeedLabel.Position = UDim2.new(0.05, 0, 0, 230)
@@ -119,7 +103,7 @@ Knob.MouseButton1Down:Connect(function()
     conn = RunService.RenderStepped:Connect(function()
         local rel = math.clamp((LocalPlayer:GetMouse().X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
         Knob.Position = UDim2.new(rel, -10, 0.5, -10)
-        local multiplier = 1 + (rel * 4) -- 1 to 5
+        local multiplier = 1 + (rel * 4)
         SpeedLabel.Text = "Walk Speed: " .. string.format("%.1f", multiplier) .. "x"
         ProfileSettings.SpeedValue = 16 * multiplier
     end)
