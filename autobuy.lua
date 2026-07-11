@@ -14,7 +14,6 @@ local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
-    FastHitting = false,
     MultiJumpActive = false,
     CurrentSpeedMultiplier = 1.0
 }
@@ -27,12 +26,10 @@ local jumpCount = 0
 -- ---------------------------------------------------------------------
 
 local BUY_BOMB_REMOTE = nil
-local MINE_REMOTE = nil
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-    MINE_REMOTE = remotesFolder:FindFirstChild("Mine") or remotesFolder:FindFirstChild("HitCrystal") or remotesFolder:FindFirstChild("Damage")
 end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
@@ -59,31 +56,6 @@ end)
 ProximityPromptService.PromptShown:Connect(function(prompt)
     if ProfileSettings.InstantInteractions then
         prompt.HoldDuration = 0
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if ProfileSettings.FastHitting and Mouse then
-            pcall(function()
-                local target = Mouse.Target
-                if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
-                    local character = LocalPlayer.Character
-                    if character then
-                        local equippedTool = character:FindFirstChildOfClass("Tool")
-                        if equippedTool then
-                            if MINE_REMOTE and MINE_REMOTE:IsA("RemoteEvent") then
-                                MINE_REMOTE:FireServer()
-                            end
-                            equippedTool:Activate()
-                        end
-                    end
-                end
-            end)
-            task.wait(0.05)
-        else
-            task.wait(0.5)
-        end
     end
 end)
 
@@ -203,8 +175,7 @@ end
 
 createToggle("Auto Buy Bombs", 55, function(state) ProfileSettings.AutoBuyActive = state end)
 createToggle("Instant E-Mining", 105, function(state) ProfileSettings.InstantInteractions = state end)
-createToggle("Smart Fast Hitting", 155, function(state) ProfileSettings.FastHitting = state end)
-createToggle("Infinite Multi-Jump", 205, function(state) ProfileSettings.MultiJumpActive = state end)
+createToggle("Infinite Multi-Jump", 155, function(state) ProfileSettings.MultiJumpActive = state end)
 
 -- ---------------------------------------------------------------------
 --  3. SLIDER ELEMENT
