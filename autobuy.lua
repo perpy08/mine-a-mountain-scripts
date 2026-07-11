@@ -10,14 +10,20 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
 -- Main State Flags
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
     FastHitting = false,
+    MultiJumpActive = false,
     CurrentSpeedMultiplier = 1.0
 }
+
+-- Multi-Jump Tracking Variables
+local maxBonusJumps = 10
+local jumpCount = 0
 
 -- ---------------------------------------------------------------------
 --  1. AUTOMATION FUNCTIONAL LOOPS
@@ -25,10 +31,12 @@ local ProfileSettings = {
 
 -- Safe Remote Discovery
 local BUY_BOMB_REMOTE = nil
-local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5) or ReplicatedStorage:WaitForChild("Events", 5)
+local MINE_REMOTE = nil
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5) or ReplicatedStorage:WaitForChild("Events", 5) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
+    MINE_REMOTE = remotesFolder:FindFirstChild("Mine") or remotesFolder:FindFirstChild("HitCrystal") or remotesFolder:FindFirstChild("Damage")
 end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
@@ -52,39 +60,47 @@ task.spawn(function()
     end
 end)
 
--- Absolute Instant Mining (Forces Hold Duration to Zero)
+-- Absolute Instant Mining
 ProximityPromptService.PromptShown:Connect(function(prompt)
     if ProfileSettings.InstantInteractions then
         prompt.HoldDuration = 0
     end
 end)
 
--- Extreme Fast Hitting Engine (Bypasses tool animation delays completely)
+-- Smart Conditional Crystal Hitting Loop
 task.spawn(function()
     while true do
         if ProfileSettings.FastHitting then
             pcall(function()
-                local character = LocalPlayer.Character
-                if character then
-                    local equippedTool = character:FindFirstChildOfClass("Tool")
-                    if equippedTool then
-                        equippedTool:Activate()
+                local target = Mouse.Target
+                -- Only activate if the player's mouse is hovering over an object named "Crystal" or containing "crystal"
+                if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
+                    local character = LocalPlayer.Character
+                    if character then
+                        local equippedTool = character:FindFirstChildOfClass("Tool")
+                        if equippedTool then
+                            if MINE_REMOTE and MINE_REMOTE:IsA("RemoteEvent") then
+                                MINE_REMOTE:FireServer()
+                            end
+                            equippedTool:Activate()
+                        end
                     end
                 end
             end)
-            task.wait(0.1) -- Rapid fire tool updates directly to server
+            task.wait(0.05)
         else
             task.wait(0.5)
         end
     end
 end)
 
--- Anti-Reset Humanoid Speed Enforcer
-local function ManageSpeed(character)
+-- Multi-Jump and Anti-Reset Speed Enforcer
+local function ManageCharacter(character)
     local humanoid = character:WaitForChild("Humanoid", 5)
-    if not humanoid then return end
+    local rootPart = character:WaitForChild("HumanoidRootPart", 5)
+    if not humanoid or not rootPart then return end
     
-    -- Force speed instantly whenever the game attempts to override it
+    -- Speed Enforcer Connection
     local speedConnection
     speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         local expectedSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
@@ -92,21 +108,50 @@ local function ManageSpeed(character)
             humanoid.WalkSpeed = expectedSpeed
         end
     end)
-    
-    -- Apply initially
     humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
     
-    -- Cleanup on death/respawn
+    -- Reset jump tracking when landing on solid ground
+    local stateConnection
+    stateConnection = humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Landed then
+            jumpCount = 0
+        end
+    end)
+    
     humanoid.Died:Connect(function()
         if speedConnection then speedConnection:Disconnect() end
+        if stateConnection then stateConnection:Disconnect() end
     end)
 end
 
-if LocalPlayer.Character then ManageSpeed(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(ManageSpeed)
+if LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(ManageCharacter)
+
+-- Monitor Spacebar Input for Mid-Air Multi-Jumps
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    
+    if input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid acoustics and rootPart then
+            local state = humanoid:GetState()
+            -- Check if player is currently in the air
+            if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+                if jumpCount < maxBonusJumps then
+                    jumpCount = jumpCount + 1
+                    -- Apply an upward force burst to simulate a fresh jump
+                    rootPart.Velocity = Vector3.new(rootPart.Velocity.X, humanoid.JumpPower, rootPart.Velocity.Z)
+                end
+            end
+        end
+    end
+end)
 
 -- ---------------------------------------------------------------------
---  2. GRAPHICAL USER INTERFACE WITH UPDATED 5X SLIDER
+--  2. GRAPHICAL USER INTERFACE
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -116,9 +161,9 @@ ScreenGui.ResetOnSpawn = false
 local success, err = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Balanced Main Frame Window
+-- Frame sizing expanded to 310px to fit 4 toggles + 1 slider comfortably
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 265)
+MainFrame.Size = UDim2.new(0, 240, 0, 310)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
@@ -129,7 +174,6 @@ local FrameCorner = Instance.new("UICorner")
 FrameCorner.CornerRadius = UDim.new(0, 8)
 FrameCorner.Parent = MainFrame
 
--- Header
 local HeaderLabel = Instance.new("TextLabel")
 HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
 HeaderLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -143,7 +187,6 @@ local HeaderCorner = Instance.new("UICorner")
 HeaderCorner.CornerRadius = UDim.new(0, 8)
 HeaderCorner.Parent = HeaderLabel
 
--- Toggle UI Helper Function
 local function createToggle(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -175,7 +218,7 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
--- Render Structural Standard Toggles
+-- Render Options UI Menu Layout
 createToggle("Auto Buy Bombs", 55, function(state)
     ProfileSettings.AutoBuyActive = state
 end)
@@ -184,17 +227,21 @@ createToggle("Instant E-Mining", 105, function(state)
     ProfileSettings.InstantInteractions = state
 end)
 
-createToggle("Fast Crystal Hitting", 155, function(state)
+createToggle("Smart Fast Hitting", 155, function(state)
     ProfileSettings.FastHitting = state
 end)
 
+createToggle("Infinite Multi-Jump", 205, function(state)
+    ProfileSettings.MultiJumpActive = state
+end)
+
 -- ---------------------------------------------------------------------
---  3. EXPANDED SLIDER ELEMENT (SPEED MULTIPLIER UP TO 5.0x)
+--  3. SLIDER ELEMENT (5.0x SPEED MAX)
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 205)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 250)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
@@ -237,10 +284,7 @@ local function updateSlider(input)
     local relativeX = mouseX - SliderTrack.AbsolutePosition.X
     local percentage = math.clamp(relativeX / trackWidth, 0, 1)
     
-    -- Maps linear percentage dynamically across range [1.0 -> 5.0]
     local rawValue = 1.0 + (percentage * 4.0)
-    
-    -- Snap checkpoints by steps of 0.5 (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
     local snapValue = math.floor((rawValue * 2) + 0.5) / 2
     local finalPercentage = (snapValue - 1.0) / 4.0
     
@@ -248,7 +292,6 @@ local function updateSlider(input)
     SliderLabel.Text = "Speed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
     ProfileSettings.CurrentSpeedMultiplier = snapValue
     
-    -- Instantly push configuration directly to current Humanoid physical frame
     pcall(function()
         local character = LocalPlayer.Character
         if character and character:FindFirstChildOfClass("Humanoid") then
