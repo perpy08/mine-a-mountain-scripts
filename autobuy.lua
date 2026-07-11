@@ -1,5 +1,5 @@
 -- =====================================================================
---  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL (V2)
+--  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL (V3)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -12,7 +12,7 @@ local Mouse = LocalPlayer:GetMouse()
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
-    FastHitting = false,
+    NoRagdollActive = false,
     MultiJumpActive = false,
     CurrentSpeedMultiplier = 1.0,
     LuckBoostValue = 0
@@ -22,11 +22,10 @@ local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. AUTOMATION LOOPS & REMOTES
+--  1. AUTOMATION & CORE LOOPS
 -- ---------------------------------------------------------------------
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 local BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-local MINE_REMOTE = remotesFolder:FindFirstChild("Mine") or remotesFolder:FindFirstChild("HitCrystal") or remotesFolder:FindFirstChild("Damage")
 local LUCK_REMOTE = remotesFolder:FindFirstChild("CrystalLuck") or remotesFolder:FindFirstChild("CrystalBoost")
 
 -- Instant Mine Loop
@@ -38,6 +37,22 @@ task.spawn(function()
             end
         end
         task.wait(1)
+    end
+end)
+
+-- No Ragdoll Loop
+task.spawn(function()
+    while true do
+        if ProfileSettings.NoRagdollActive and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                -- Disable ragdoll-related states if they exist
+                pcall(function()
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+                end)
+            end
+        end
+        task.wait(0.5)
     end
 end)
 
@@ -53,23 +68,6 @@ task.spawn(function()
             end
         end
         task.wait(3)
-    end
-end)
-
--- Fast Hitting Loop
-task.spawn(function()
-    while true do
-        if ProfileSettings.FastHitting and Mouse.Target then
-            local t = Mouse.Target
-            if (t.Name:lower():find("crystal") or (t.Parent and t.Parent.Name:lower():find("crystal"))) then
-                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                if tool and MINE_REMOTE then
-                    pcall(function() MINE_REMOTE:FireServer() end)
-                    tool:Activate()
-                end
-            end
-        end
-        task.wait(0.05)
     end
 end)
 
@@ -105,10 +103,10 @@ end
 
 createToggle("Auto Buy Bombs", 45, function(s) ProfileSettings.AutoBuyActive = s end)
 createToggle("Instant E-Mining", 90, function(s) ProfileSettings.InstantInteractions = s end)
-createToggle("Smart Fast Hitting", 135, function(s) ProfileSettings.FastHitting = s end)
+createToggle("No Ragdoll", 135, function(s) ProfileSettings.NoRagdollActive = s end)
 createToggle("Infinite Multi-Jump", 180, function(s) ProfileSettings.MultiJumpActive = s end)
 
--- Universal Slider Function
+-- Slider Helper
 local function createSlider(name, yPos, min, max, callback)
     local lbl = Instance.new("TextLabel", MainFrame)
     lbl.Size = UDim2.new(0.9, 0, 0, 20)
@@ -142,7 +140,6 @@ local function createSlider(name, yPos, min, max, callback)
     end)
 end
 
--- Speed Slider (1.0 to 3.0)
 createSlider("Speed Multiplier", 240, 1.0, 3.0, function(v) 
     ProfileSettings.CurrentSpeedMultiplier = v
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
@@ -150,7 +147,6 @@ createSlider("Speed Multiplier", 240, 1.0, 3.0, function(v)
     end
 end)
 
--- Luck Boost Slider (0 to 100)
 createSlider("Luck Boost", 300, 0, 100, function(v) 
     ProfileSettings.LuckBoostValue = v
     if LUCK_REMOTE then pcall(function() LUCK_REMOTE:FireServer(v) end) end
