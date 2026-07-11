@@ -17,7 +17,7 @@ local ProfileSettings = {
     InstantInteractions = false,
     MultiJumpActive = false,
     NoRagdollActive = false,
-    NoDamageActive = false, -- Added
+    NoDamageActive = false,
     CurrentSpeedMultiplier = 1.0
 }
 
@@ -57,17 +57,17 @@ task.spawn(function()
     end
 end)
 
--- Healing Loop (No Damage)
+-- High-Frequency Healing Loop (Aggressive DOT out-healing)
 task.spawn(function()
     while true do
         if ProfileSettings.NoDamageActive then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
+            if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
                 hum.Health = hum.MaxHealth
             end
         end
-        task.wait(0.1)
+        task.wait(0.01)
     end
 end)
 
@@ -147,7 +147,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 440) -- Adjusted height
+MainFrame.Size = UDim2.new(0, 240, 0, 440)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
@@ -207,7 +207,7 @@ createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s
 createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
 createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
-createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end) -- Injected Toggle
+createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end)
 
 createButton("TELEPORT TO SPAWN", 305, function()
     local char = LocalPlayer.Character
@@ -227,7 +227,7 @@ end)
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 360) -- Shifted down
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 360)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
