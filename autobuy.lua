@@ -73,7 +73,6 @@ task.spawn(function()
         if ProfileSettings.FastHitting then
             pcall(function()
                 local target = Mouse.Target
-                -- Only activate if the player's mouse is hovering over an object named "Crystal" or containing "crystal"
                 if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
                     local character = LocalPlayer.Character
                     if character then
@@ -127,7 +126,7 @@ end
 if LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(ManageCharacter)
 
--- Monitor Spacebar Input for Mid-Air Multi-Jumps
+-- Monitor Spacebar Input for Mid-Air Multi-Jumps (Fixed Syntax Error Here)
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
     
@@ -136,13 +135,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
         
-        if humanoid acoustics and rootPart then
+        if humanoid and rootPart then
             local state = humanoid:GetState()
-            -- Check if player is currently in the air
             if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
                 if jumpCount < maxBonusJumps then
                     jumpCount = jumpCount + 1
-                    -- Apply an upward force burst to simulate a fresh jump
                     rootPart.Velocity = Vector3.new(rootPart.Velocity.X, humanoid.JumpPower, rootPart.Velocity.Z)
                 end
             end
@@ -161,7 +158,6 @@ ScreenGui.ResetOnSpawn = false
 local success, err = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Frame sizing expanded to 310px to fit 4 toggles + 1 slider comfortably
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 240, 0, 310)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
@@ -218,7 +214,6 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
--- Render Options UI Menu Layout
 createToggle("Auto Buy Bombs", 55, function(state)
     ProfileSettings.AutoBuyActive = state
 end)
