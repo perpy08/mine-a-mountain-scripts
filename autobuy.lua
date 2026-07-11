@@ -1,5 +1,5 @@
 -- =====================================================================
---  MINE A MOUNTAIN: ULTIMATE AUTOMATION & MAGNET PANEL
+--  MINE A MOUNTAIN: DYNAMIC SMART HUB
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -17,6 +17,7 @@ local ProfileSettings = {
     FastHitting = false,
     MultiJumpActive = false,
     CurrentSpeedMultiplier = 1.0,
+    CrystalBoostValue = 0,
     
     -- Magnet Settings
     MagnetActive = false,
@@ -29,16 +30,27 @@ local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. AUTOMATION LOOPS & REMOTES
+--  1. AUTOMATION ENGINE & REMOTES
 -- ---------------------------------------------------------------------
 
 local BUY_BOMB_REMOTE = nil
 local MINE_REMOTE = nil
+local LUCK_REMOTE = nil
+
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-    MINE_REMOTE = remotesFolder:FindFirstChild("Mine") or remotesFolder:FindFirstChild("HitCrystal") or remotesFolder:FindFirstChild("Damage")
+    
+    -- Updated matching to look for your newly discovered console keywords
+    MINE_REMOTE = remotesFolder:FindFirstChild("CrystalMining") 
+        or remotesFolder:FindFirstChild("CrystalMiningController") 
+        or remotesFolder:FindFirstChild("Mine") 
+        or remotesFolder:FindFirstChild("HitCrystal")
+        
+    LUCK_REMOTE = remotesFolder:FindFirstChild("CrystalLuck") 
+        or remotesFolder:FindFirstChild("CrystalBoost") 
+        or remotesFolder:FindFirstChild("LuckRemote")
 end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
@@ -73,13 +85,18 @@ task.spawn(function()
         if ProfileSettings.FastHitting and Mouse then
             pcall(function()
                 local target = Mouse.Target
-                if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
+                -- Scan for name matching using your found tags
+                if target and (target.Name:lower():find("crystal") or target.Name:lower():find("lod") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
                     local character = LocalPlayer.Character
                     if character then
                         local equippedTool = character:FindFirstChildOfClass("Tool")
                         if equippedTool then
-                            if MINE_REMOTE and MINE_REMOTE:IsA("RemoteEvent") then
-                                MINE_REMOTE:FireServer()
+                            if MINE_REMOTE then
+                                if MINE_REMOTE:IsA("RemoteEvent") then
+                                    MINE_REMOTE:FireServer()
+                                elseif MINE_REMOTE:IsA("RemoteFunction") then
+                                    MINE_REMOTE:InvokeServer()
+                                end
                             end
                             equippedTool:Activate()
                         end
@@ -104,19 +121,14 @@ local function TriggerCrystalMagnet()
     local pulled = 0
     local targetRarity = ProfileSettings.SelectedRarity:lower()
 
-    -- Scans the Workspace safely for items matching parameters
     for _, obj in ipairs(workspace:GetDescendants()) do
         if pulled >= ProfileSettings.PullCount then break end
 
-        -- Checks if the object is named crystal or part of a crystal model
-        local isCrystal = obj:IsA("BasePart") and (obj.Name:lower():find("crystal") or (obj.Parent and obj.Parent.Name:lower():find("crystal")))
+        local isCrystal = obj:IsA("BasePart") and (obj.Name:lower():find("crystal") or obj.Name:lower():find("lod") or (obj.Parent and obj.Parent.Name:lower():find("crystal")))
         
         if isCrystal and obj.CanCollide == true then 
-            -- Distance Check
             local distance = (obj.Position - rootPart.Position).Magnitude
             if distance <= ProfileSettings.PullRadius then
-                
-                -- Rarity Filtering (looks at name or container names)
                 local matchesRarity = false
                 if targetRarity == "all" then
                     matchesRarity = true
@@ -128,7 +140,6 @@ local function TriggerCrystalMagnet()
 
                 if matchesRarity then
                     pulled = pulled + 1
-                    -- Snaps crystal parts straight to your feet safely
                     pcall(function()
                         obj.CFrame = rootPart.CFrame * CFrame.new(0, -2, -2)
                     end)
@@ -188,7 +199,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 -- ---------------------------------------------------------------------
---  3. GRAPHICAL USER INTERFACE (EXPANDED FOR MAGNET)
+--  3. GRAPHICAL USER INTERFACE (DYNAMIC AUTO-SISING)
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -196,9 +207,8 @@ ScreenGui.Name = "MineAMountainPanel"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Expanded Window height to 520px to hold the new settings layout
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 250, 0, 520)
+MainFrame.Size = UDim2.new(0, 250, 0, 360) -- Dynamic base start height
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 MainFrame.Active = true
@@ -221,6 +231,13 @@ HeaderLabel.Parent = MainFrame
 local HeaderCorner = Instance.new("UICorner")
 HeaderCorner.CornerRadius = UDim.new(0, 8)
 HeaderCorner.Parent = HeaderLabel
+
+-- Base UI Element Positioning Containers
+local BottomSlidersContainer = Instance.new("Frame")
+BottomSlidersContainer.Size = UDim2.new(0.9, 0, 0, 100)
+BottomSlidersContainer.Position = UDim2.new(0.05, 0, 0, 225) -- Shifts down on magnet activation
+BottomSlidersContainer.BackgroundTransparency = 1
+BottomSlidersContainer.Parent = MainFrame
 
 local function createToggle(name, positionY, callback)
     local Button = Instance.new("TextButton")
@@ -260,10 +277,10 @@ createToggle("Smart Fast Hitting", 115, function(state) ProfileSettings.FastHitt
 createToggle("Infinite Multi-Jump", 150, function(state) ProfileSettings.MultiJumpActive = state end)
 
 -- ---------------------------------------------------------------------
---  4. MAGNET PANEL SUBSECTION (CONDITIONAL VISIBILITY)
+--  4. MAGNET PANEL EXPANSION SYSTEM
 -- ---------------------------------------------------------------------
 local MagnetContainer = Instance.new("Frame")
-MagnetContainer.Size = UDim2.new(0.9, 0, 0, 190)
+MagnetContainer.Size = UDim2.new(0.9, 0, 0, 160)
 MagnetContainer.Position = UDim2.new(0.05, 0, 0, 225)
 MagnetContainer.BackgroundTransparency = 1
 MagnetContainer.Visible = false
@@ -271,7 +288,7 @@ MagnetContainer.Parent = MainFrame
 
 -- Rarity Dropdown Elements
 local DropdownButton = Instance.new("TextButton")
-DropdownButton.Size = UDim2.new(1, 0, 0, 30)
+DropdownButton.Size = UDim2.new(1, 0, 0, 25)
 DropdownButton.Position = UDim2.new(0, 0, 0, 0)
 DropdownButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 DropdownButton.Text = "Rarity: All"
@@ -282,7 +299,7 @@ DropdownButton.Parent = MagnetContainer
 
 local DropdownList = Instance.new("Frame")
 DropdownList.Size = UDim2.new(1, 0, 0, 120)
-DropdownList.Position = UDim2.new(0, 0, 0, 32)
+DropdownList.Position = UDim2.new(0, 0, 0, 27)
 DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 DropdownList.Visible = false
 DropdownList.ZIndex = 5
@@ -314,8 +331,8 @@ end)
 
 -- Limit Number Input Box
 local InputLabel = Instance.new("TextLabel")
-InputLabel.Size = UDim2.new(0.6, 0, 0, 30)
-InputLabel.Position = UDim2.new(0, 0, 0, 40)
+InputLabel.Size = UDim2.new(0.6, 0, 0, 25)
+InputLabel.Position = UDim2.new(0, 0, 0, 35)
 InputLabel.BackgroundTransparency = 1
 InputLabel.Text = "Pull Count Limit:"
 InputLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -325,8 +342,8 @@ InputLabel.TextXAlignment = Enum.TextXAlignment.Left
 InputLabel.Parent = MagnetContainer
 
 local TextBox = Instance.new("TextBox")
-TextBox.Size = UDim2.new(0.35, 0, 0, 25)
-TextBox.Position = UDim2.new(0.65, 0, 0, 42)
+TextBox.Size = UDim2.new(0.35, 0, 0, 22)
+TextBox.Position = UDim2.new(0.65, 0, 0, 36)
 TextBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 TextBox.Text = "10"
 TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -347,13 +364,13 @@ end)
 -- Magnet Radius Slider Track
 local MagSliderTrack = Instance.new("Frame")
 MagSliderTrack.Size = UDim2.new(1, 0, 0, 6)
-MagSliderTrack.Position = UDim2.new(0, 0, 0, 95)
+MagSliderTrack.Position = UDim2.new(0, 0, 0, 85)
 MagSliderTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 MagSliderTrack.Parent = MagnetContainer
 
 local MagSliderLabel = Instance.new("TextLabel")
 MagSliderLabel.Size = UDim2.new(1, 0, 0, 15)
-MagSliderLabel.Position = UDim2.new(0, 0, 0, 75)
+MagSliderLabel.Position = UDim2.new(0, 0, 0, 65)
 MagSliderLabel.BackgroundTransparency = 1
 MagSliderLabel.Text = "Scan Radius: 50 studs"
 MagSliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -380,7 +397,7 @@ UserInputService.InputChanged:Connect(function(input)
     if magDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local relativeX = input.Position.X - MagSliderTrack.AbsolutePosition.X
         local pct = math.clamp(relativeX / MagSliderTrack.AbsoluteSize.X, 0, 1)
-        local radiusVal = math.floor(10 + (pct * 240)) -- Scale radius up to 250 studs max
+        local radiusVal = math.floor(10 + (pct * 240))
         
         MagSliderBtn.Position = UDim2.new(pct, -6, 0.5, -6)
         MagSliderLabel.Text = "Scan Radius: " .. radiusVal .. " studs"
@@ -394,10 +411,9 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Action Pull Executer Trigger
 local PullActionBtn = Instance.new("TextButton")
-PullActionBtn.Size = UDim2.new(1, 0, 0, 35)
-PullActionBtn.Position = UDim2.new(0, 0, 0, 120)
+PullActionBtn.Size = UDim2.new(1, 0, 0, 30)
+PullActionBtn.Position = UDim2.new(0, 0, 0, 110)
 PullActionBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 100)
 PullActionBtn.Text = "✨ PULL CRYSTALS ✨"
 PullActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -413,41 +429,44 @@ PullActionBtn.MouseButton1Click:Connect(function()
     TriggerCrystalMagnet()
 end)
 
--- Main Toggle that shows/hides options block completely
+-- Dynamic UI Height Sizing Controller Logic
 createToggle("Crystal Magnet System", 185, function(state)
     ProfileSettings.MagnetActive = state
     MagnetContainer.Visible = state
+    if state then
+        MainFrame.Size = UDim2.new(0, 250, 0, 520)
+        BottomSlidersContainer.Position = UDim2.new(0.05, 0, 0, 395)
+    else
+        MainFrame.Size = UDim2.new(0, 250, 0, 360)
+        BottomSlidersContainer.Position = UDim2.new(0.05, 0, 0, 225)
+    end
 end)
 
 -- ---------------------------------------------------------------------
---  5. SPEED MULTIPLIER SLIDER ELEMENT
+--  5. WALK SPEED MULTIPLIER SLIDER
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
-SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 455)
+SliderContainer.Size = UDim2.new(1, 0, 0, 45)
+SliderContainer.Position = UDim2.new(0, 0, 0, 0)
 SliderContainer.BackgroundTransparency = 1
-SliderContainer.Parent = MainFrame
+SliderContainer.Parent = BottomSlidersContainer
 
 local SliderLabel = Instance.new("TextLabel")
-SliderLabel.Size = UDim2.new(1, 0, 0, 20)
+SliderLabel.Size = UDim2.new(1, 0, 0, 15)
 SliderLabel.BackgroundTransparency = 1
 SliderLabel.Text = "WalkSpeed Multiplier: 1.0x"
 SliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 SliderLabel.Font = Enum.Font.SourceSans
-SliderLabel.TextSize = 13
+SliderLabel.TextSize = 12
 SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
 SliderLabel.Parent = SliderContainer
 
 local SliderTrack = Instance.new("Frame")
 SliderTrack.Size = UDim2.new(1, 0, 0, 6)
-SliderTrack.Position = UDim2.new(0, 0, 0, 28)
+SliderTrack.Position = UDim2.new(0, 0, 0, 22)
 SliderTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 SliderTrack.Parent = SliderContainer
-
-local SliderTrackCorner = Instance.new("UICorner")
-SliderTrackCorner.CornerRadius = UDim.new(0, 3)
-SliderTrackCorner.Parent = SliderTrack
 
 local SliderButton = Instance.new("TextButton")
 SliderButton.Size = UDim2.new(0, 14, 0, 14)
@@ -456,34 +475,7 @@ SliderButton.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
 SliderButton.Text = ""
 SliderButton.Parent = SliderTrack
 
-local SliderButtonCorner = Instance.new("UICorner")
-SliderButtonCorner.CornerRadius = UDim.new(1, 0)
-SliderButtonCorner.Parent = SliderButton
-
 local isDragging = false
-
-local function updateSlider(input)
-    local trackWidth = SliderTrack.AbsoluteSize.X
-    local mouseX = input.Position.X
-    local relativeX = mouseX - SliderTrack.AbsolutePosition.X
-    local percentage = math.clamp(relativeX / trackWidth, 0, 1)
-    
-    local rawValue = 1.0 + (percentage * 4.0)
-    local snapValue = math.floor((rawValue * 2) + 0.5) / 2
-    local finalPercentage = (snapValue - 1.0) / 4.0
-    
-    SliderButton.Position = UDim2.new(finalPercentage, -7, 0.5, -7)
-    SliderLabel.Text = "WalkSpeed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
-    ProfileSettings.CurrentSpeedMultiplier = snapValue
-    
-    pcall(function()
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChildOfClass("Humanoid") then
-            character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16 * snapValue
-        end
-    end)
-end
-
 SliderButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         isDragging = true
@@ -492,7 +484,18 @@ end)
 
 UserInputService.InputChanged:Connect(function(input)
     if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        updateSlider(input)
+        local pct = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
+        local snapValue = math.floor(((1.0 + (pct * 4.0)) * 2) + 0.5) / 2
+        
+        SliderButton.Position = UDim2.new((snapValue - 1.0) / 4.0, -7, 0.5, -7)
+        SliderLabel.Text = "WalkSpeed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
+        ProfileSettings.CurrentSpeedMultiplier = snapValue
+        
+        pcall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16 * snapValue
+            end
+        end)
     end
 end)
 
@@ -502,6 +505,75 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+-- ---------------------------------------------------------------------
+--  6. NEW OPTIMIZATION: CRYSTAL LUCK BOOST SLIDER (0 - 100)
+-- ---------------------------------------------------------------------
+
+local BoostContainer = Instance.new("Frame")
+BoostContainer.Size = UDim2.new(1, 0, 0, 45)
+BoostContainer.Position = UDim2.new(0, 0, 0, 50)
+BoostContainer.BackgroundTransparency = 1
+BoostContainer.Parent = BottomSlidersContainer
+
+local BoostLabel = Instance.new("TextLabel")
+BoostLabel.Size = UDim2.new(1, 0, 0, 15)
+BoostLabel.BackgroundTransparency = 1
+BoostLabel.Text = "Crystal Luck Boost: 0"
+BoostLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+BoostLabel.Font = Enum.Font.SourceSans
+BoostLabel.TextSize = 12
+BoostLabel.TextXAlignment = Enum.TextXAlignment.Left
+BoostLabel.Parent = BoostContainer
+
+local BoostTrack = Instance.new("Frame")
+BoostTrack.Size = UDim2.new(1, 0, 0, 6)
+BoostTrack.Position = UDim2.new(0, 0, 0, 22)
+BoostTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+BoostTrack.Parent = BoostContainer
+
+local BoostButton = Instance.new("TextButton")
+BoostButton.Size = UDim2.new(0, 14, 0, 14)
+BoostButton.Position = UDim2.new(0, -7, 0.5, -7)
+BoostButton.BackgroundColor3 = Color3.fromRGB(150, 100, 200) -- Unique Purple Accent Color
+BoostButton.Text = ""
+BoostButton.Parent = BoostTrack
+
+local boostDragging = false
+BoostButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        boostDragging = true
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if boostDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local pct = math.clamp((input.Position.X - BoostTrack.AbsolutePosition.X) / BoostTrack.AbsoluteSize.X, 0, 1)
+        local boostValue = math.floor(pct * 100)
+        
+        BoostButton.Position = UDim2.new(pct, -7, 0.5, -7)
+        BoostLabel.Text = "Crystal Luck Boost: " .. tostring(boostValue)
+        ProfileSettings.CrystalBoostValue = boostValue
+        
+        -- Safe execution fire to the game framework if remote hooks match
+        if LUCK_REMOTE then
+            pcall(function()
+                if LUCK_REMOTE:IsA("RemoteEvent") then
+                    LUCK_REMOTE:FireServer(boostValue)
+                elseif LUCK_REMOTE:IsA("RemoteFunction") then
+                    LUCK_REMOTE:InvokeServer(boostValue)
+                end
+            end)
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        boostDragging = false
+    end
+end)
+
+-- Visibility Layer Toggle Hotkey (Insert Key)
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Insert then
         MainFrame.Visible = not MainFrame.Visible
