@@ -1,15 +1,13 @@
 -- =====================================================================
---  MINE A MOUNTAIN: DYNAMIC SMART HUB (OPTIMIZED)
+--  MINE A MOUNTAIN: REFINED HUB
 -- =====================================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
-
 local LocalPlayer = Players.LocalPlayer
 
--- Main State Flags
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
@@ -21,115 +19,100 @@ local ProfileSettings = {
 local maxBonusJumps = 10
 local jumpCount = 0
 
--- Remotes
-local BUY_BOMB_REMOTE = nil
-local LUCK_REMOTE = nil
-
-local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
-if remotesFolder then
-    BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-    LUCK_REMOTE = remotesFolder:FindFirstChild("CrystalLuck") or remotesFolder:FindFirstChild("CrystalBoost") or remotesFolder:FindFirstChild("LuckRemote")
-end
+-- Setup Remotes
+local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events") or ReplicatedStorage
+local BUY_BOMB_REMOTE = remotes:FindFirstChild("BuyBomb") or remotes:FindFirstChild("PurchaseBomb")
+local LUCK_REMOTE = remotes:FindFirstChild("CrystalLuck") or remotes:FindFirstChild("CrystalBoost") or remotes:FindFirstChild("LuckRemote")
 
 -- ---------------------------------------------------------------------
---  1. AUTOMATION ENGINE
--- ---------------------------------------------------------------------
-task.spawn(function()
-    local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
-    while true do
-        if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
-            for _, bombName in ipairs(cashBombs) do
-                if not ProfileSettings.AutoBuyActive then break end
-                pcall(function()
-                    if BUY_BOMB_REMOTE:IsA("RemoteFunction") then BUY_BOMB_REMOTE:InvokeServer(bombName) else BUY_BOMB_REMOTE:FireServer(bombName) end
-                end)
-                task.wait(0.4)
-            end
-        end
-        task.wait(3)
-    end
-end)
-
-ProximityPromptService.PromptShown:Connect(function(prompt)
-    if ProfileSettings.InstantInteractions then prompt.HoldDuration = 0 end
-end)
-
--- ---------------------------------------------------------------------
---  2. CHARACTER LOGIC
--- ---------------------------------------------------------------------
-local function ManageCharacter(character)
-    local humanoid = character:WaitForChild("Humanoid", 5)
-    if humanoid then
-        humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
-        humanoid.StateChanged:Connect(function(_, newState)
-            if newState == Enum.HumanoidStateType.Landed then jumpCount = 0 end
-        end)
-    end
-end
-
-if LocalPlayer and LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(ManageCharacter)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hum and root and jumpCount < maxBonusJumps then
-            jumpCount += 1
-            root.Velocity = Vector3.new(root.Velocity.X, hum.JumpPower, root.Velocity.Z)
-        end
-    end
-end)
-
--- ---------------------------------------------------------------------
---  3. GUI
+--  GUI SYSTEM
 -- ---------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 250, 0, 250)
+MainFrame.Size = UDim2.new(0, 260, 0, 300)
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.Active = true
 MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
-local function createToggle(name, positionY, callback)
+local function createToggle(name, yPos, callback)
     local btn = Instance.new("TextButton", MainFrame)
-    btn.Size = UDim2.new(0.9, 0, 0, 30)
-    btn.Position = UDim2.new(0.05, 0, 0, positionY)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     btn.Text = name .. ": OFF"
-    btn.TextColor3 = Color3.fromRGB(220, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
     local on = false
     btn.MouseButton1Click:Connect(function()
         on = not on
-        btn.BackgroundColor3 = on and Color3.fromRGB(50, 100, 50) or Color3.fromRGB(40, 40, 40)
-        btn.TextColor3 = on and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 80, 80)
+        btn.BackgroundColor3 = on and Color3.fromRGB(60, 120, 60) or Color3.fromRGB(50, 50, 50)
         btn.Text = name .. (on and ": ON" or ": OFF")
         callback(on)
     end)
 end
 
 createToggle("Auto Buy Bombs", 10, function(s) ProfileSettings.AutoBuyActive = s end)
-createToggle("Instant E-Mining", 50, function(s) ProfileSettings.InstantInteractions = s end)
-createToggle("Infinite Multi-Jump", 90, function(s) ProfileSettings.MultiJumpActive = s end)
+createToggle("Instant E-Mining", 55, function(s) ProfileSettings.InstantInteractions = s end)
+createToggle("Multi-Jump", 100, function(s) ProfileSettings.MultiJumpActive = s end)
 
--- Speed Slider
-local SpeedLabel = Instance.new("TextLabel", MainFrame)
-SpeedLabel.Position = UDim2.new(0.05, 0, 0, 130)
-SpeedLabel.Text = "WalkSpeed Multiplier: 1.0x"
-SpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-SpeedLabel.BackgroundTransparency = 1
+-- Slider Helper
+local function createSlider(name, yPos, min, max, callback)
+    local label = Instance.new("TextLabel", MainFrame)
+    label.Size = UDim2.new(0.9, 0, 0, 20)
+    label.Position = UDim2.new(0.05, 0, 0, yPos)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ": "
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    
+    local track = Instance.new("Frame", MainFrame)
+    track.Size = UDim2.new(0.9, 0, 0, 8)
+    track.Position = UDim2.new(0.05, 0, 0, yPos + 20)
+    track.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    
+    local knob = Instance.new("TextButton", track)
+    knob.Size = UDim2.new(0, 15, 0, 15)
+    knob.Position = UDim2.new(0, -7, 0.5, -7)
+    knob.Text = ""
+    
+    knob.MouseButton1Down:Connect(function()
+        local conn
+        conn = game:GetService("RunService").RenderStepped:Connect(function()
+            local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
+            local relX = math.clamp((mouseX - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            knob.Position = UDim2.new(relX, -7, 0.5, -7)
+            local val = math.floor(min + (relX * (max - min)))
+            label.Text = name .. ": " .. val
+            callback(val)
+        end)
+        game:GetService("UserInputService").InputEnded:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 then conn:Disconnect() end
+        end)
+    end)
+end
 
-local SpeedSlider = Instance.new("TextButton", MainFrame)
-SpeedSlider.Size = UDim2.new(0.9, 0, 0, 10)
-SpeedSlider.Position = UDim2.new(0.05, 0, 0, 150)
-SpeedSlider.MouseButton1Click:Connect(function(x, y)
-    local pct = math.clamp((x - SpeedSlider.AbsolutePosition.X) / SpeedSlider.AbsoluteSize.X, 0, 1)
-    local val = math.floor(((1.0 + (pct * 4.0)) * 2) + 0.5) / 2
-    ProfileSettings.CurrentSpeedMultiplier = val
-    SpeedLabel.Text = "WalkSpeed Multiplier: " .. val .. "x"
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16 * val
+createSlider("WalkSpeed", 150, 16, 80, function(v) 
+    ProfileSettings.CurrentSpeedMultiplier = v/16
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = v
+    end
+end)
+
+createSlider("Luck Boost", 210, 0, 100, function(v) 
+    ProfileSettings.CrystalBoostValue = v
+    if LUCK_REMOTE then pcall(function() LUCK_REMOTE:FireServer(v) end) end
+end)
+
+-- ---------------------------------------------------------------------
+--  LOGIC
+-- ---------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
+            pcall(function() BUY_BOMB_REMOTE:FireServer("Classic Bomb") end)
+        end
+        task.wait(3)
     end
 end)
 
