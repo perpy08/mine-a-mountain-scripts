@@ -1,44 +1,37 @@
 -- =====================================================================
---  MINE A MOUNTAIN: FULL INTEGRATED HUB (V2)
+--  MINE A MOUNTAIN: STABLE HUB (CORE FEATURES)
 -- =====================================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
-    FastHitting = false,
     MultiJumpActive = false,
-    MagnetActive = false,
-    CurrentSpeedMultiplier = 1.0,
-    CrystalBoostValue = 0,
-    SelectedRarity = "All",
-    PullCount = 50,
-    PullRadius = 1000
+    CurrentSpeedMultiplier = 1.0
 }
 
 local jumpCount = 0
 local maxBonusJumps = 10
 
--- Remote Setup
-local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
-local BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-local MINE_REMOTE = remotesFolder:FindFirstChild("CrystalMining") or remotesFolder:FindFirstChild("CrystalMiningController")
-local LUCK_REMOTE = remotesFolder:FindFirstChild("CrystalLuck") or remotesFolder:FindFirstChild("CrystalBoost")
+-- ---------------------------------------------------------------------
+--  1. AUTOMATION ENGINE
+-- ---------------------------------------------------------------------
+local BUY_BOMB_REMOTE = nil
+local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events") or ReplicatedStorage
+if remotes then
+    BUY_BOMB_REMOTE = remotes:FindFirstChild("BuyBomb") or remotes:FindFirstChild("PurchaseBomb")
+end
 
--- ---------------------------------------------------------------------
---  AUTOMATION ENGINE
--- ---------------------------------------------------------------------
 task.spawn(function()
     while true do
         if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
             local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
             for _, b in ipairs(cashBombs) do
+                if not ProfileSettings.AutoBuyActive then break end
                 pcall(function() BUY_BOMB_REMOTE:FireServer(b) end)
                 task.wait(0.4)
             end
@@ -47,38 +40,18 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    while true do
-        if ProfileSettings.MagnetActive then
-            local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local pulled = 0
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if pulled >= ProfileSettings.PullCount then break end
-                    if obj:IsA("BasePart") and (obj.Name:lower():find("crystal") or obj.Name:lower():find("lod")) then
-                        if (obj.Position - root.Position).Magnitude <= ProfileSettings.PullRadius then
-                            local target = ProfileSettings.SelectedRarity:lower()
-                            if target == "all" or obj.Name:lower():find(target) or (obj.Parent and obj.Parent.Name:lower():find(target)) then
-                                obj.CFrame = root.CFrame * CFrame.new(0, -2, -2)
-                                pulled += 1
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        task.wait(0.5)
-    end
-end)
-
 -- ---------------------------------------------------------------------
---  CHARACTER LOGIC (Speed/Jump)
+--  2. CHARACTER MANAGEMENT
 -- ---------------------------------------------------------------------
 local function ManageCharacter(char)
     local hum = char:WaitForChild("Humanoid")
     hum.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
-    hum.StateChanged:Connect(function(_, s) if s == Enum.HumanoidStateType.Landed then jumpCount = 0 end end)
+    
+    hum.StateChanged:Connect(function(_, s) 
+        if s == Enum.HumanoidStateType.Landed then jumpCount = 0 end 
+    end)
 end
+
 if LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(ManageCharacter)
 
@@ -93,9 +66,40 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 -- ---------------------------------------------------------------------
---  UI (Shortened for brevity, use your existing button logic)
+--  3. GUI SYSTEM (Guaranteed Visibility)
 -- ---------------------------------------------------------------------
--- [Keep your original createToggle function here]
--- [Keep your Slider logic here, but remember to set the radius range to 1000]
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.Name = "MineAMountainPanel"
+ScreenGui.ResetOnSpawn = false
 
-print("Hub Loaded with Integrated Magnet & Features")
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 200, 0, 150)
+MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local function createToggle(name, pos, callback)
+    local btn = Instance.new("TextButton", MainFrame)
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, pos)
+    btn.Text = name .. ": OFF"
+    local on = false
+    btn.MouseButton1Click:Connect(function()
+        on = not on
+        btn.Text = name .. (on and ": ON" or ": OFF")
+        callback(on)
+    end)
+end
+
+createToggle("Auto Buy Bombs", 10, function(s) ProfileSettings.AutoBuyActive = s end)
+createToggle("Infinite Multi-Jump", 50, function(s) ProfileSettings.MultiJumpActive = s end)
+createToggle("Instant E-Mining", 90, function(s) ProfileSettings.InstantInteractions = s end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.Insert then 
+        MainFrame.Visible = not MainFrame.Visible 
+    end
+end)
+
+print("Hub loaded: Core features active.")
