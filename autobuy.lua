@@ -10,7 +10,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 -- Main State Flags
 local ProfileSettings = {
@@ -19,6 +18,7 @@ local ProfileSettings = {
     MultiJumpActive = false,
     NoRagdollActive = false,
     NoDamageActive = false,
+    PlayerESPActive = false,
     CurrentSpeedMultiplier = 1.0
 }
 
@@ -26,7 +26,55 @@ local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. AUTOMATION LOOPS & REMOTES
+--  1. ESP LOGIC
+-- ---------------------------------------------------------------------
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "PlayerHighlight"
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.Enabled = false
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerLabel"
+    billboard.Size = UDim2.new(0, 100, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Enabled = false
+    
+    local nameLabel = Instance.new("TextLabel", billboard)
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextStrokeTransparency = 0
+    
+    local function setupChar(char)
+        highlight.Parent = char
+        billboard.Parent = char:WaitForChild("HumanoidRootPart")
+    end
+    
+    player.CharacterAdded:Connect(setupChar)
+    if player.Character then setupChar(player.Character) end
+end
+
+Players.PlayerAdded:Connect(createESP)
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+
+RunService.RenderStepped:Connect(function()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("PlayerHighlight") then
+            p.Character.PlayerHighlight.Enabled = ProfileSettings.PlayerESPActive
+            p.Character.HumanoidRootPart:FindFirstChild("PlayerLabel").Enabled = ProfileSettings.PlayerESPActive
+        end
+    end
+end)
+
+-- ---------------------------------------------------------------------
+--  2. AUTOMATION & CORE LOGIC
 -- ---------------------------------------------------------------------
 
 local BUY_BOMB_REMOTE = nil
@@ -38,7 +86,6 @@ end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
 
--- Automation Loop
 task.spawn(function()
     while true do
         if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
@@ -58,7 +105,6 @@ task.spawn(function()
     end
 end)
 
--- UI-Friendly Healing (No Damage Logic)
 RunService.Heartbeat:Connect(function()
     if ProfileSettings.NoDamageActive then
         local char = LocalPlayer.Character
@@ -136,7 +182,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 -- ---------------------------------------------------------------------
---  2. GRAPHICAL USER INTERFACE
+--  3. GRAPHICAL USER INTERFACE
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -145,16 +191,13 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 440)
+MainFrame.Size = UDim2.new(0, 240, 0, 485)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
 MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
-
-local FrameCorner = Instance.new("UICorner")
-FrameCorner.CornerRadius = UDim.new(0, 8)
-FrameCorner.Parent = MainFrame
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
 local HeaderLabel = Instance.new("TextLabel")
 HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
@@ -164,7 +207,6 @@ HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 HeaderLabel.Font = Enum.Font.SourceSansBold
 HeaderLabel.TextSize = 14
 HeaderLabel.Parent = MainFrame
-
 Instance.new("UICorner", HeaderLabel).CornerRadius = UDim.new(0, 8)
 
 local function createToggle(name, positionY, callback)
@@ -206,26 +248,25 @@ createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInterac
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
 createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
 createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end)
+createToggle("Player ESP", 305, function(s) ProfileSettings.PlayerESPActive = s end)
 
-createButton("TELEPORT TO SPAWN", 305, function()
+createButton("TELEPORT TO SPAWN", 355, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
         if spawn then
-            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
-            local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
-            tween:Play()
+            TweenService:Create(char.HumanoidRootPart, TweenInfo.new(0.5), {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)}):Play()
         end
     end
 end)
 
 -- ---------------------------------------------------------------------
---  3. SLIDER ELEMENT
+--  4. SLIDER ELEMENT
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 360)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 410)
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
@@ -261,7 +302,6 @@ local function updateSlider(input)
     local mouseX = input.Position.X
     local relativeX = mouseX - SliderTrack.AbsolutePosition.X
     local percentage = math.clamp(relativeX / trackWidth, 0, 1)
-    
     local rawValue = 1.0 + (percentage * 4.0)
     local snapValue = math.floor((rawValue * 2) + 0.5) / 2
     local finalPercentage = (snapValue - 1.0) / 4.0
