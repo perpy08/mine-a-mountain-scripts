@@ -6,8 +6,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService") -- Added for anti-rubberband
 
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 -- Main State Flags
 local ProfileSettings = {
@@ -25,13 +27,10 @@ local jumpCount = 0
 -- ---------------------------------------------------------------------
 
 local BUY_BOMB_REMOTE = nil
-local HOME_REMOTE = nil
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
 
 if remotesFolder then
     BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
-    -- Using the remote you found in the F9 console
-    HOME_REMOTE = remotesFolder:FindFirstChild("BackHomeController")
 end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
@@ -127,7 +126,9 @@ MainFrame.Active = true
 MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
 
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 8)
+FrameCorner.Parent = MainFrame
 
 local HeaderLabel = Instance.new("TextLabel")
 HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
@@ -162,6 +163,7 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
+-- Teleport Button (Anti-Rubberband)
 local function createButton(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -178,9 +180,16 @@ createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s
 createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
 
-createButton("GO TO BASE", 205, function()
-    if HOME_REMOTE then
-        if HOME_REMOTE:IsA("RemoteFunction") then HOME_REMOTE:InvokeServer() else HOME_REMOTE:FireServer() end
+createButton("TELEPORT TO SPAWN", 205, function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local spawn = workspace:FindFirstChild("SpawnLocation", true)
+        if spawn then
+            -- Tweening moves character smoothly to avoid server anti-cheat
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
+            local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
+            tween:Play()
+        end
     end
 end)
 
