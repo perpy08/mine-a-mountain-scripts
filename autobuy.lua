@@ -16,7 +16,8 @@ local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
     MultiJumpActive = false,
-    NoRagdollActive = false, -- Added
+    NoRagdollActive = false,
+    NoDamageActive = false, -- Added
     CurrentSpeedMultiplier = 1.0
 }
 
@@ -36,6 +37,7 @@ end
 
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
 
+-- Automation Loop
 task.spawn(function()
     while true do
         if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
@@ -52,6 +54,20 @@ task.spawn(function()
             end
         end
         task.wait(3)
+    end
+end)
+
+-- Healing Loop (No Damage)
+task.spawn(function()
+    while true do
+        if ProfileSettings.NoDamageActive then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                hum.Health = hum.MaxHealth
+            end
+        end
+        task.wait(0.1)
     end
 end)
 
@@ -75,7 +91,6 @@ local function ManageCharacter(character)
     end)
     humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
 
-    -- Injected No Ragdoll Logic: Prevent PlatformStand (common in fall scripts)
     local platformConnection
     platformConnection = humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
         if ProfileSettings.NoRagdollActive and humanoid.PlatformStand then
@@ -85,7 +100,6 @@ local function ManageCharacter(character)
     
     local stateConnection
     stateConnection = humanoid.StateChanged:Connect(function(_, newState)
-        -- Injected No Ragdoll Logic: Now catches FallingDown and stops it
         if ProfileSettings.NoRagdollActive and (newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.Ragdoll or newState == Enum.HumanoidStateType.FallingDown) then
             humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
@@ -96,7 +110,7 @@ local function ManageCharacter(character)
     
     humanoid.Died:Connect(function()
         if speedConnection then speedConnection:Disconnect() end
-        if platformConnection then platformConnection:Disconnect() end -- Disconnects our new interceptor safely
+        if platformConnection then platformConnection:Disconnect() end
         if stateConnection then stateConnection:Disconnect() end
     end)
 end
@@ -133,7 +147,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 400) -- Adjusted height to accommodate new toggle
+MainFrame.Size = UDim2.new(0, 240, 0, 440) -- Adjusted height
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
@@ -177,7 +191,6 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
--- Teleport Button (Anti-Rubberband)
 local function createButton(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -193,14 +206,14 @@ end
 createToggle("Auto Buy Bombs", 55, function(s) ProfileSettings.AutoBuyActive = s end)
 createToggle("Instant E-Mining", 105, function(s) ProfileSettings.InstantInteractions = s end)
 createToggle("Infinite Multi-Jump", 155, function(s) ProfileSettings.MultiJumpActive = s end)
-createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end) -- Injected Toggle
+createToggle("No Ragdoll", 205, function(s) ProfileSettings.NoRagdollActive = s end)
+createToggle("No Damage", 255, function(s) ProfileSettings.NoDamageActive = s end) -- Injected Toggle
 
-createButton("TELEPORT TO SPAWN", 255, function() -- Shifted down
+createButton("TELEPORT TO SPAWN", 305, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
         if spawn then
-            -- Tweening moves character smoothly to avoid server anti-cheat
             local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
             local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
             tween:Play()
@@ -214,7 +227,7 @@ end)
 
 local SliderContainer = Instance.new("Frame")
 SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
-SliderContainer.Position = UDim2.new(0.05, 0, 0, 310) -- Shifted down
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 360) -- Shifted down
 SliderContainer.BackgroundTransparency = 1
 SliderContainer.Parent = MainFrame
 
