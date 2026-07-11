@@ -1,120 +1,296 @@
 -- =====================================================================
---  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL (FIXED V6)
+--  MINE A MOUNTAIN: UNIVERSAL SAFE AUTOMATION PANEL
 -- =====================================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
 
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer and LocalPlayer:GetMouse()
+
+-- Main State Flags
 local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
-    NoRagdollActive = false,
+    FastHitting = false,
     MultiJumpActive = false,
-    SpeedValue = 16
+    CurrentSpeedMultiplier = 1.0
 }
 
--- 1. GUI SETUP (Explicit parenting)
+local maxBonusJumps = 10
+local jumpCount = 0
+
+-- ---------------------------------------------------------------------
+--  1. AUTOMATION LOOPS & REMOTES
+-- ---------------------------------------------------------------------
+
+local BUY_BOMB_REMOTE = nil
+local MINE_REMOTE = nil
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3) or ReplicatedStorage:WaitForChild("Events", 3) or ReplicatedStorage
+
+if remotesFolder then
+    BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
+    MINE_REMOTE = remotesFolder:FindFirstChild("Mine") or remotesFolder:FindFirstChild("HitCrystal") or remotesFolder:FindFirstChild("Damage")
+end
+
+local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
+
+task.spawn(function()
+    while true do
+        if ProfileSettings.AutoBuyActive and BUY_BOMB_REMOTE then
+            for _, bombName in ipairs(cashBombs) do
+                if not ProfileSettings.AutoBuyActive then break end
+                pcall(function()
+                    if BUY_BOMB_REMOTE:IsA("RemoteFunction") then
+                        BUY_BOMB_REMOTE:InvokeServer(bombName)
+                    else
+                        BUY_BOMB_REMOTE:FireServer(bombName)
+                    end
+                end)
+                task.wait(0.4)
+            end
+        end
+        task.wait(3)
+    end
+end)
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+    if ProfileSettings.InstantInteractions then
+        prompt.HoldDuration = 0
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if ProfileSettings.FastHitting and Mouse then
+            pcall(function()
+                local target = Mouse.Target
+                if target and (target.Name:lower():find("crystal") or (target.Parent and target.Parent.Name:lower():find("crystal"))) then
+                    local character = LocalPlayer.Character
+                    if character then
+                        local equippedTool = character:FindFirstChildOfClass("Tool")
+                        if equippedTool then
+                            if MINE_REMOTE and MINE_REMOTE:IsA("RemoteEvent") then
+                                MINE_REMOTE:FireServer()
+                            end
+                            equippedTool:Activate()
+                        end
+                    end
+                end
+            end)
+            task.wait(0.05)
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
+local function ManageCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    local rootPart = character:WaitForChild("HumanoidRootPart", 5)
+    if not humanoid or not rootPart then return end
+    
+    local speedConnection
+    speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        local expectedSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
+        if math.abs(humanoid.WalkSpeed - expectedSpeed) > 1 then
+            humanoid.WalkSpeed = expectedSpeed
+        end
+    end)
+    humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
+    
+    local stateConnection
+    stateConnection = humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Landed then
+            jumpCount = 0
+        end
+    end)
+    
+    humanoid.Died:Connect(function()
+        if speedConnection then speedConnection:Disconnect() end
+        if stateConnection then stateConnection:Disconnect() end
+    end)
+end
+
+if LocalPlayer and LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
+if LocalPlayer then LocalPlayer.CharacterAdded:Connect(ManageCharacter) end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    if input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid and rootPart then
+            local state = humanoid:GetState()
+            if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+                if jumpCount < maxBonusJumps then
+                    jumpCount = jumpCount + 1
+                    rootPart.Velocity = Vector3.new(rootPart.Velocity.X, humanoid.JumpPower, rootPart.Velocity.Z)
+                end
+            end
+        end
+    end
+end)
+
+-- ---------------------------------------------------------------------
+--  2. GRAPHICAL USER INTERFACE (SAFE PLAYERGUI HOOK)
+-- ---------------------------------------------------------------------
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MineAMountainPanel"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 300)
-MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Size = UDim2.new(0, 240, 0, 310)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
-MainFrame.Draggable = true
+MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
-local Title = Instance.new("TextLabel")
-Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "AUTOMATION PANEL"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.Bold
-Title.TextSize = 18
-Title.BackgroundTransparency = 1
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 8)
+FrameCorner.Parent = MainFrame
 
--- 2. LOGIC
-RunService.RenderStepped:Connect(function()
-    if ProfileSettings.NoRagdollActive and LocalPlayer.Character then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+local HeaderLabel = Instance.new("TextLabel")
+HeaderLabel.Size = UDim2.new(1, 0, 0, 35)
+HeaderLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+HeaderLabel.Text = "Mine A Mountain"
+HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+HeaderLabel.Font = Enum.Font.SourceSansBold
+HeaderLabel.TextSize = 14
+HeaderLabel.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 8)
+HeaderCorner.Parent = HeaderLabel
+
+local function createToggle(name, positionY, callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0.9, 0, 0, 35)
+    Button.Position = UDim2.new(0.05, 0, 0, positionY)
+    Button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    Button.Text = name .. ": OFF"
+    Button.TextColor3 = Color3.fromRGB(220, 80, 80)
+    Button.Font = Enum.Font.SourceSans
+    Button.TextSize = 14
+    Button.Parent = MainFrame
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 4)
+    Corner.Parent = Button
+
+    local toggled = false
+    Button.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        if toggled then
+            Button.BackgroundColor3 = Color3.fromRGB(60, 110, 60)
+            Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            Button.Text = name .. ": ON"
+        else
+            Button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            Button.TextColor3 = Color3.fromRGB(220, 80, 80)
+            Button.Text = name .. ": OFF"
         end
-    end
-end)
-
--- 3. COMPONENTS
-local function createToggle(name, yPos, callback)
-    local btn = Instance.new("TextButton")
-    btn.Parent = MainFrame
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
-    btn.Position = UDim2.new(0.05, 0, 0, yPos)
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Text = name .. ": OFF"
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
-    local on = false
-    btn.MouseButton1Click:Connect(function()
-        on = not on
-        btn.BackgroundColor3 = on and Color3.fromRGB(70, 150, 70) or Color3.fromRGB(50, 50, 50)
-        btn.Text = name .. (on and ": ON" or ": OFF")
-        callback(on)
+        callback(toggled)
     end)
 end
 
-createToggle("Auto Buy", 50, function(s) ProfileSettings.AutoBuyActive = s end)
-createToggle("Instant Mine", 95, function(s) ProfileSettings.InstantInteractions = s end)
-createToggle("No Ragdoll", 140, function(s) ProfileSettings.NoRagdollActive = s end)
-createToggle("Multi-Jump", 185, function(s) ProfileSettings.MultiJumpActive = s end)
+createToggle("Auto Buy Bombs", 55, function(state) ProfileSettings.AutoBuyActive = state end)
+createToggle("Instant E-Mining", 105, function(state) ProfileSettings.InstantInteractions = state end)
+createToggle("Smart Fast Hitting", 155, function(state) ProfileSettings.FastHitting = state end)
+createToggle("Infinite Multi-Jump", 205, function(state) ProfileSettings.MultiJumpActive = state end)
 
--- Speed Slider
-local SpeedLabel = Instance.new("TextLabel", MainFrame)
-SpeedLabel.Size = UDim2.new(0.9, 0, 0, 20)
-SpeedLabel.Position = UDim2.new(0.05, 0, 0, 230)
-SpeedLabel.Text = "Walk Speed: 1.0x"
-SpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-SpeedLabel.BackgroundTransparency = 1
+-- ---------------------------------------------------------------------
+--  3. SLIDER ELEMENT
+-- ---------------------------------------------------------------------
 
-local Track = Instance.new("Frame", MainFrame)
-Track.Size = UDim2.new(0.9, 0, 0, 10)
-Track.Position = UDim2.new(0.05, 0, 0, 255)
-Track.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-Instance.new("UICorner", Track).CornerRadius = UDim.new(0, 5)
+local SliderContainer = Instance.new("Frame")
+SliderContainer.Size = UDim2.new(0.9, 0, 0, 45)
+SliderContainer.Position = UDim2.new(0.05, 0, 0, 250)
+SliderContainer.BackgroundTransparency = 1
+SliderContainer.Parent = MainFrame
 
-local Knob = Instance.new("TextButton", Track)
-Knob.Size = UDim2.new(0, 20, 0, 20)
-Knob.Position = UDim2.new(0, -10, 0.5, -10)
-Knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+local SliderLabel = Instance.new("TextLabel")
+SliderLabel.Size = UDim2.new(1, 0, 0, 20)
+SliderLabel.BackgroundTransparency = 1
+SliderLabel.Text = "Speed Multiplier: 1.0x"
+SliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SliderLabel.Font = Enum.Font.SourceSans
+SliderLabel.TextSize = 13
+SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+SliderLabel.Parent = SliderContainer
 
-Knob.MouseButton1Down:Connect(function()
-    local conn
-    conn = RunService.RenderStepped:Connect(function()
-        local rel = math.clamp((LocalPlayer:GetMouse().X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
-        Knob.Position = UDim2.new(rel, -10, 0.5, -10)
-        local multiplier = 1 + (rel * 4)
-        SpeedLabel.Text = "Walk Speed: " .. string.format("%.1f", multiplier) .. "x"
-        ProfileSettings.SpeedValue = 16 * multiplier
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            conn:Disconnect()
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = ProfileSettings.SpeedValue
-            end
+local SliderTrack = Instance.new("Frame")
+SliderTrack.Size = UDim2.new(1, 0, 0, 6)
+SliderTrack.Position = UDim2.new(0, 0, 0, 28)
+SliderTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+SliderTrack.Parent = SliderContainer
+
+local SliderTrackCorner = Instance.new("UICorner")
+SliderTrackCorner.CornerRadius = UDim.new(0, 3)
+SliderTrackCorner.Parent = SliderTrack
+
+local SliderButton = Instance.new("TextButton")
+SliderButton.Size = UDim2.new(0, 14, 0, 14)
+SliderButton.Position = UDim2.new(0, 0, 0.5, -7)
+SliderButton.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+SliderButton.Text = ""
+SliderButton.Parent = SliderTrack
+
+local SliderButtonCorner = Instance.new("UICorner")
+SliderButtonCorner.CornerRadius = UDim.new(1, 0)
+SliderButtonCorner.Parent = SliderButton
+
+local isDragging = false
+
+local function updateSlider(input)
+    local trackWidth = SliderTrack.AbsoluteSize.X
+    local mouseX = input.Position.X
+    local relativeX = mouseX - SliderTrack.AbsolutePosition.X
+    local percentage = math.clamp(relativeX / trackWidth, 0, 1)
+    
+    local rawValue = 1.0 + (percentage * 4.0)
+    local snapValue = math.floor((rawValue * 2) + 0.5) / 2
+    local finalPercentage = (snapValue - 1.0) / 4.0
+    
+    SliderButton.Position = UDim2.new(finalPercentage, -7, 0.5, -7)
+    SliderLabel.Text = "Speed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
+    ProfileSettings.CurrentSpeedMultiplier = snapValue
+    
+    pcall(function()
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChildOfClass("Humanoid") then
+            character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16 * snapValue
         end
     end)
+end
+
+SliderButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = true
+    end
 end)
 
-UserInputService.InputBegan:Connect(function(i, gpe) if not gpe and i.KeyCode == Enum.KeyCode.Insert then MainFrame.Visible = not MainFrame.Visible end end)
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateSlider(input)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = false
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
