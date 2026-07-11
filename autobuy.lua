@@ -7,7 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService") 
-local RunService = game:GetService("RunService") -- Added for frame-perfect loop
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
@@ -58,13 +58,20 @@ task.spawn(function()
     end
 end)
 
--- Ultra-Aggressive Frame-Perfect Healing
+-- Over-Powered Health Injection
 RunService.Heartbeat:Connect(function()
     if ProfileSettings.NoDamageActive then
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
-            hum.Health = hum.MaxHealth
+        if hum then
+            -- Force massive MaxHealth and lock Health to it
+            local GOD_MODE_VAL = 999999999
+            if hum.MaxHealth ~= GOD_MODE_VAL then
+                hum.MaxHealth = GOD_MODE_VAL
+            end
+            if hum.Health < GOD_MODE_VAL then
+                hum.Health = GOD_MODE_VAL
+            end
         end
     end
 end)
