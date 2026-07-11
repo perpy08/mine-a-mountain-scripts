@@ -74,11 +74,19 @@ local function ManageCharacter(character)
         end
     end)
     humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
+
+    -- Injected No Ragdoll Logic: Prevent PlatformStand (common in fall scripts)
+    local platformConnection
+    platformConnection = humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+        if ProfileSettings.NoRagdollActive and humanoid.PlatformStand then
+            humanoid.PlatformStand = false
+        end
+    end)
     
     local stateConnection
     stateConnection = humanoid.StateChanged:Connect(function(_, newState)
-        -- Injected No Ragdoll Logic
-        if ProfileSettings.NoRagdollActive and (newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.Ragdoll) then
+        -- Injected No Ragdoll Logic: Now catches FallingDown and stops it
+        if ProfileSettings.NoRagdollActive and (newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.Ragdoll or newState == Enum.HumanoidStateType.FallingDown) then
             humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
         if newState == Enum.HumanoidStateType.Landed then
@@ -88,6 +96,7 @@ local function ManageCharacter(character)
     
     humanoid.Died:Connect(function()
         if speedConnection then speedConnection:Disconnect() end
+        if platformConnection then platformConnection:Disconnect() end -- Disconnects our new interceptor safely
         if stateConnection then stateConnection:Disconnect() end
     end)
 end
@@ -168,6 +177,7 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
+-- Teleport Button (Anti-Rubberband)
 local function createButton(name, positionY, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.9, 0, 0, 35)
@@ -190,6 +200,7 @@ createButton("TELEPORT TO SPAWN", 255, function() -- Shifted down
     if char and char:FindFirstChild("HumanoidRootPart") then
         local spawn = workspace:FindFirstChild("SpawnLocation", true)
         if spawn then
+            -- Tweening moves character smoothly to avoid server anti-cheat
             local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
             local tween = TweenService:Create(char.HumanoidRootPart, tweenInfo, {CFrame = spawn.CFrame + Vector3.new(0, 3, 0)})
             tween:Play()
