@@ -17,8 +17,14 @@ local ProfileSettings = {
 --  1. AUTOMATION FUNCTIONAL LOOPS
 -- ---------------------------------------------------------------------
 
--- Auto Buy Logic
-local BUY_BOMB_REMOTE = ReplicatedStorage:WaitForChild("Remotes", 5):FindFirstChild("BuyBomb") or ReplicatedStorage:WaitForChild("Events", 5):FindFirstChild("PurchaseBomb")
+-- Safe Remote Discovery (Fixes the 'attempt to index nil with FindFirstChild' error)
+local BUY_BOMB_REMOTE = nil
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5) or ReplicatedStorage:WaitForChild("Events", 5)
+
+if remotesFolder then
+    BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
+end
+
 local cashBombs = {"Classic Bomb", "Wind Bomb", "Ice Bomb", "Fire Bomb", "Thunder Bomb"}
 
 task.spawn(function()
