@@ -6,7 +6,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService") -- Added for anti-rubberband
+local TweenService = game:GetService("TweenService") 
+local RunService = game:GetService("RunService") -- Added for frame-perfect loop
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
@@ -57,17 +58,14 @@ task.spawn(function()
     end
 end)
 
--- High-Frequency Healing Loop (Aggressive DOT out-healing)
-task.spawn(function()
-    while true do
-        if ProfileSettings.NoDamageActive then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
-                hum.Health = hum.MaxHealth
-            end
+-- Ultra-Aggressive Frame-Perfect Healing
+RunService.Heartbeat:Connect(function()
+    if ProfileSettings.NoDamageActive then
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
+            hum.Health = hum.MaxHealth
         end
-        task.wait(0.01)
     end
 end)
 
