@@ -16,7 +16,7 @@ local ProfileSettings = {
     AutoBuyActive = false,
     InstantInteractions = false,
     FastHitting = false,
-    CurrentSpeedMultiplier = 1.0 -- Track slider state instead of binary toggle
+    CurrentSpeedMultiplier = 1.0
 }
 
 -- ---------------------------------------------------------------------
@@ -59,43 +59,54 @@ ProximityPromptService.PromptShown:Connect(function(prompt)
     end
 end)
 
--- Core Modification Loop
-RunService.Stepped:Connect(function()
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    
-    -- 1. Dynamic WalkSpeed Application
-    if humanoid then
-        local targetSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
-        humanoid.WalkSpeed = targetSpeed
-    end
-
-    -- 2. Fast Crystal Hitting Loop
-    if ProfileSettings.FastHitting then
-        if humanoid then
-            local animator = humanoid:FindFirstChildOfClass("Animator")
-            if animator then
-                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                    if track.Name:lower():find("swing") or track.Name:lower():find("tool") or track.Name:lower():find("slash") or track.Name:lower():find("attack") then
-                        track:AdjustSpeed(3.5)
+-- Extreme Fast Hitting Engine (Bypasses tool animation delays completely)
+task.spawn(function()
+    while true do
+        if ProfileSettings.FastHitting then
+            pcall(function()
+                local character = LocalPlayer.Character
+                if character then
+                    local equippedTool = character:FindFirstChildOfClass("Tool")
+                    if equippedTool then
+                        equippedTool:Activate()
                     end
                 end
-            end
-        end
-        
-        local equippedTool = character:FindFirstChildOfClass("Tool")
-        if equippedTool then
-            pcall(function()
-                equippedTool:Activate()
             end)
+            task.wait(0.1) -- Rapid fire tool updates directly to server
+        else
+            task.wait(0.5)
         end
     end
 end)
 
+-- Anti-Reset Humanoid Speed Enforcer
+local function ManageSpeed(character)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+    
+    -- Force speed instantly whenever the game attempts to override it
+    local speedConnection
+    speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        local expectedSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
+        if math.abs(humanoid.WalkSpeed - expectedSpeed) > 1 then
+            humanoid.WalkSpeed = expectedSpeed
+        end
+    end)
+    
+    -- Apply initially
+    humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
+    
+    -- Cleanup on death/respawn
+    humanoid.Died:Connect(function()
+        if speedConnection then speedConnection:Disconnect() end
+    end)
+end
+
+if LocalPlayer.Character then ManageSpeed(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(ManageSpeed)
+
 -- ---------------------------------------------------------------------
---  2. GRAPHICAL USER INTERFACE WITH SLIDER ELEMENT
+--  2. GRAPHICAL USER INTERFACE WITH UPDATED 5X SLIDER
 -- ---------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -178,7 +189,7 @@ createToggle("Fast Crystal Hitting", 155, function(state)
 end)
 
 -- ---------------------------------------------------------------------
---  3. CUSTOM SLIDER ELEMENT (SPEED MULTIPLIER)
+--  3. EXPANDED SLIDER ELEMENT (SPEED MULTIPLIER UP TO 5.0x)
 -- ---------------------------------------------------------------------
 
 local SliderContainer = Instance.new("Frame")
@@ -218,8 +229,6 @@ local SliderButtonCorner = Instance.new("UICorner")
 SliderButtonCorner.CornerRadius = UDim.new(1, 0)
 SliderButtonCorner.Parent = SliderButton
 
--- Slider Interaction Scripting Logic
-local UserInputService = game:GetService("UserInputService")
 local isDragging = false
 
 local function updateSlider(input)
@@ -228,16 +237,24 @@ local function updateSlider(input)
     local relativeX = mouseX - SliderTrack.AbsolutePosition.X
     local percentage = math.clamp(relativeX / trackWidth, 0, 1)
     
-    -- Map linear percentage directly across specified range [1.0 -> 3.0]
-    local rawValue = 1.0 + (percentage * 2.0)
+    -- Maps linear percentage dynamically across range [1.0 -> 5.0]
+    local rawValue = 1.0 + (percentage * 4.0)
     
-    -- Snapping checkpoints: Default (1), 1.5, 2, 2.5, Max (3)
+    -- Snap checkpoints by steps of 0.5 (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
     local snapValue = math.floor((rawValue * 2) + 0.5) / 2
-    local finalPercentage = (snapValue - 1.0) / 2.0
+    local finalPercentage = (snapValue - 1.0) / 4.0
     
     SliderButton.Position = UDim2.new(finalPercentage, -7, 0.5, -7)
     SliderLabel.Text = "Speed Multiplier: " .. string.format("%.1f", snapValue) .. "x"
     ProfileSettings.CurrentSpeedMultiplier = snapValue
+    
+    -- Instantly push configuration directly to current Humanoid physical frame
+    pcall(function()
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChildOfClass("Humanoid") then
+            character:FindFirstChildOfClass("Humanoid").WalkSpeed = 16 * snapValue
+        end
+    end)
 end
 
 SliderButton.InputBegan:Connect(function(input)
