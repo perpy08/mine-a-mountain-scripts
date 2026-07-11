@@ -1,74 +1,108 @@
 -- =====================================================================
---  MINE A MOUNTAIN: FIXED REMOTE ACCESS (No more Nil Errors)
+--  MINE A MOUNTAIN: GLOBAL SCAN EDITION (Anti-Nil-Error)
 -- =====================================================================
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("WaitForChild")(game, "ReplicatedStorage") -- Safe Wait
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local ProfileSettings = {
     LuckBoostPercent = 0,
-    MagnetActive = false,
     SelectedRarity = "All",
     PullCount = 50,
     PullRadius = 1000
 }
 
--- 1. SAFE REMOTE DISCOVERY (Using WaitForChild instead of FindFirstChild)
-local function getRemote(name)
-    -- This looks through the entire ReplicatedStorage tree for the remote
-    local remote = nil
-    local function search(parent)
-        for _, child in ipairs(parent:GetChildren()) do
-            if child.Name == name then return child end
-            if child:IsA("Folder") or child:IsA("Model") then
-                local found = search(child)
-                if found then return found end
-            end
+-- GLOBAL REMOTE SCANNER: Finds the remote regardless of path
+local function FindRemote(name)
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj.Name == name and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
+            return obj
         end
     end
-    return search(ReplicatedStorage)
+    return nil
 end
 
--- Safely assign remotes
-local PICKUP_REMOTE = getRemote("CrystalPickupJuice")
-local LUCK_BOOST_REMOTE = getRemote("LuckBoost")
+local PICKUP_REMOTE = FindRemote("CrystalPickupJuice")
+local LUCK_BOOST_REMOTE = FindRemote("LuckBoost")
 
 -- ---------------------------------------------------------------------
---  2. ROBUST RARITY & COLLECTION ENGINE
+--  COLLECTION LOGIC
 -- ---------------------------------------------------------------------
 local function IsValidRarity(obj)
     if ProfileSettings.SelectedRarity == "All" then return true end
     local target = ProfileSettings.SelectedRarity:lower()
-    local name = obj.Name:lower()
-    local parentName = obj.Parent and obj.Parent.Name:lower() or ""
-    return name:find(target) or parentName:find(target)
+    return obj.Name:lower():find(target) or (obj.Parent and obj.Parent.Name:lower():find(target))
 end
 
 local function ExecuteCollection()
-    local character = LocalPlayer.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    -- Check if remote was actually found
-    if not PICKUP_REMOTE then warn("Pickup remote not found! Check game console.") return end
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root or not PICKUP_REMOTE then return end
 
     local collected = 0
     for _, obj in ipairs(workspace:GetDescendants()) do
         if collected >= ProfileSettings.PullCount then break end
         
-        -- Filter for crystal-like objects
         local isCrystal = obj:IsA("BasePart") and (obj.Name:lower():find("crystal") or (obj.Parent and obj.Parent.Name:lower():find("crystal")))
         
         if isCrystal and IsValidRarity(obj) then
-            local dist = (obj.Position - root.Position).Magnitude
-            if dist <= ProfileSettings.PullRadius then
-                pcall(function()
-                    PICKUP_REMOTE:FireServer(obj)
-                end)
+            if (obj.Position - root.Position).Magnitude <= ProfileSettings.PullRadius then
+                pcall(function() PICKUP_REMOTE:FireServer(obj) end)
                 collected = collected + 1
                 task.wait(0.05)
             end
         end
     end
 end
+
+-- ---------------------------------------------------------------------
+--  GUI SETUP
+-- ---------------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 250, 0, 300)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Draggable = true
+
+-- Rarity Dropdown
+local RarityButton = Instance.new("TextButton", MainFrame)
+RarityButton.Size = UDim2.new(0.9, 0, 0, 40)
+RarityButton.Position = UDim2.new(0.05, 0, 0, 20)
+RarityButton.Text = "Rarity: All"
+RarityButton.MouseButton1Click:Connect(function()
+    local rarities = {"All", "Common", "Rare", "Epic", "Legendary", "Mythic"}
+    local current = table.find(rarities, ProfileSettings.SelectedRarity)
+    local nextR = rarities[(current % #rarities) + 1]
+    ProfileSettings.SelectedRarity = nextR
+    RarityButton.Text = "Rarity: " .. nextR
+end)
+
+-- Luck Boost Input
+local BoostBox = Instance.new("TextBox", MainFrame)
+BoostBox.Size = UDim2.new(0.9, 0, 0, 40)
+BoostBox.Position = UDim2.new(0.05, 0, 0, 80)
+BoostBox.PlaceholderText = "Luck Boost %"
+BoostBox.FocusLost:Connect(function()
+    local val = tonumber(BoostBox.Text)
+    if val and LUCK_BOOST_REMOTE then
+        pcall(function() LUCK_BOOST_REMOTE:FireServer(val) end)
+    end
+end)
+
+-- Pull Button
+local PullBtn = Instance.new("TextButton", MainFrame)
+PullBtn.Size = UDim2.new(0.9, 0, 0, 40)
+PullBtn.Position = UDim2.new(0.05, 0, 0, 140)
+PullBtn.Text = "PULL CRYSTALS"
+PullBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 120)
+PullBtn.MouseButton1Click:Connect(ExecuteCollection)
+
+-- Toggle Visibility
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
