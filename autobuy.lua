@@ -1,11 +1,12 @@
 -- =====================================================================
---  MINE A MOUNTAIN: STREAMLINED AUTOMATION PANEL
+--  MINE A MOUNTAIN: ADVANCED AUTOMATION PANEL
 -- =====================================================================
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Main State Flags
 local ProfileSettings = {
@@ -17,7 +18,7 @@ local ProfileSettings = {
 --  1. AUTOMATION FUNCTIONAL LOOPS
 -- ---------------------------------------------------------------------
 
--- Safe Remote Discovery (Fixes the 'attempt to index nil with FindFirstChild' error)
+-- Safe Remote Discovery
 local BUY_BOMB_REMOTE = nil
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5) or ReplicatedStorage:WaitForChild("Events", 5)
 
@@ -39,20 +40,17 @@ task.spawn(function()
                         BUY_BOMB_REMOTE:FireServer(bombName)
                     end
                 end)
-                task.wait(0.4) -- Small safety delay between purchases
+                task.wait(0.4)
             end
         end
-        task.wait(3) -- Time between total inventory check sweeps
+        task.wait(3)
     end
 end)
 
--- Fast Mining Logic (Triggers the hold interaction instantly)
+-- Absolute Instant Mining (Forces Hold Duration to Zero)
 ProximityPromptService.PromptShown:Connect(function(prompt)
     if ProfileSettings.InstantInteractions then
-        task.wait()
-        prompt:InputHoldBegin()
-        task.wait(prompt.HoldDuration)
-        prompt:InputHoldEnd()
+        prompt.HoldDuration = 0
     end
 end)
 
@@ -74,7 +72,7 @@ MainFrame.Size = UDim2.new(0, 240, 0, 160)
 MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
-MainFrame.Draggable = true -- Left-click and drag the panel anywhere on your screen
+MainFrame.Draggable = true 
 MainFrame.Parent = ScreenGui
 
 local FrameCorner = Instance.new("UICorner")
@@ -127,11 +125,22 @@ local function createToggle(name, positionY, callback)
     end)
 end
 
--- Render the two required options explicitly
+-- Render Options Explicitly
 createToggle("Auto Buy Bombs", 55, function(state)
     ProfileSettings.AutoBuyActive = state
 end)
 
-createToggle("Instant E-Mining Prompt", 105, function(state)
+createToggle("Instant E-Mining", 105, function(state)
     ProfileSettings.InstantInteractions = state
+end)
+
+-- ---------------------------------------------------------------------
+--  3. USER INPUT WINDOW ACCESSIBILITY LAYER
+-- ---------------------------------------------------------------------
+
+-- Toggle Main Frame visibility with the Insert key
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
+    end
 end)
