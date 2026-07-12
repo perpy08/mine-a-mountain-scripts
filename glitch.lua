@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + ABSOLUTE SPEED CONTROL
+--  STEPPED ANIMATION FX (12 FPS) + FRAME SKIPPING + JITTER + GLITCH
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -13,35 +13,24 @@ local EffectEnabled = false
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
 
--- Absolute Speed Control: Force the game to accept our speed
+-- Force Speed Logic
 local function forceSpeed(hum)
     hum.WalkSpeed = 16 * CurrentSpeed
 end
 
 local function watchHumanoid(hum)
     hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        if hum.WalkSpeed ~= (16 * CurrentSpeed) then
-            forceSpeed(hum)
-        end
+        if hum.WalkSpeed ~= (16 * CurrentSpeed) then forceSpeed(hum) end
     end)
     forceSpeed(hum)
 end
 
--- Hook into character setup
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if hum then watchHumanoid(hum) end
-end)
-if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-    watchHumanoid(LocalPlayer.Character.Humanoid)
-end
-
--- Stepped FX Logic
+-- Stepped FX: Now uses frame-skipping by jumping TimePosition
 local function stepAnimationTrack(track)
     if hijackedTracks[track] then return end
     hijackedTracks[track] = true
 
-    local nextUpdate = 0
+    local lastJump = 0
     local connection
     connection = RunService.Heartbeat:Connect(function()
         if not track or not track.IsPlaying then
@@ -51,31 +40,38 @@ local function stepAnimationTrack(track)
         end
 
         if EffectEnabled then
-            if os.clock() >= nextUpdate then
-                local jitter = (math.random() - 0.5) * 0.05
-                track.TimePosition = math.max(0, track.TimePosition + jitter)
-                track:AdjustSpeed(CurrentSpeed)
-                nextUpdate = os.clock() + STEP_INTERVAL
-            else
-                track:AdjustSpeed(0)
+            -- FRAME SKIPPING LOGIC:
+            -- We let it play for the interval, then snap to a new time
+            if os.clock() - lastJump >= STEP_INTERVAL then
+                -- Add Jitter + Random Skip
+                local skip = (math.random() * 0.1) -- Random forward skip
+                local jitter = (math.random() - 0.5) * 0.08 -- Random position shift
+                
+                track.TimePosition = track.TimePosition + skip + jitter
+                lastJump = os.clock()
+                
+                -- Randomly "glitch" the animation back a few frames
+                if math.random() > 0.9 then
+                    track.TimePosition = math.max(0, track.TimePosition - 0.2)
+                end
             end
+            track:AdjustSpeed(CurrentSpeed)
         else
             track:AdjustSpeed(1)
         end
     end)
 end
 
-local function hookHumanoid(humanoid)
-    local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator", 5)
-    if not animator then return end
-    animator.AnimationPlayed:Connect(stepAnimationTrack)
-    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+-- Setup
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then watchHumanoid(hum) end
+end)
+if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+    watchHumanoid(LocalPlayer.Character.Humanoid)
+    for _, track in ipairs(LocalPlayer.Character.Humanoid:FindFirstChildOfClass("Animator"):GetPlayingAnimationTracks()) do
         stepAnimationTrack(track)
     end
-end
-
-if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-    hookHumanoid(LocalPlayer.Character.Humanoid)
 end
 
 -- =====================================================================
@@ -95,22 +91,19 @@ ToggleButton.MouseButton1Click:Connect(function()
     ToggleButton.BackgroundColor3 = EffectEnabled and Color3.fromRGB(60, 110, 60) or Color3.fromRGB(110, 60, 60)
 end)
 
-local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed: 1.0x"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
+local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed: 1.00x"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
 local SliderBg = Instance.new("Frame", MainFrame); SliderBg.Size = UDim2.new(0.85, 0, 0, 6); SliderBg.Position = UDim2.new(0.075, 0, 0.75, 0); SliderBg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 3)
 
 local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(1, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
 Instance.new("UICorner", SliderBtn).CornerRadius = UDim.new(1, 0)
 
--- Mapping: Leftmost is 0.25, Rightmost is 1.0
 local function updateSpeed(rel)
     CurrentSpeed = 0.25 + (rel * 0.75)
-    CurrentSpeed = math.floor((CurrentSpeed * 4) + 0.5) / 4 -- Snaps to 0.25, 0.5, 0.75, 1.0
-    
+    CurrentSpeed = math.floor((CurrentSpeed * 4) + 0.5) / 4
     local snappedRel = (CurrentSpeed - 0.25) / 0.75
     SliderBtn.Position = UDim2.new(snappedRel, -7, 0.5, -7)
     SliderLabel.Text = "Walk Speed: " .. string.format("%.2f", CurrentSpeed) .. "x"
-    
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
         forceSpeed(LocalPlayer.Character.Humanoid)
     end
