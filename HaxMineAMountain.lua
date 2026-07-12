@@ -149,12 +149,14 @@ RunService.Heartbeat:Connect(function()
                 
                 if rayResult then
                     local distanceToGround = (rayResult.Position - rayOrigin).Magnitude
-                    local safeDistance = 3.5  -- Only slow down in the last 3.5 studs
+                    local safeDistance = 5  -- Only slow down in the last 5 studs
                     
-                    -- If very close to ground, hard brake
+                    -- If very close to ground, dampen the fall speed aggressively
                     if distanceToGround < safeDistance then
-                        -- Very aggressive brake to stop instantly
-                        rootPart.Velocity = Vector3.new(velocity.X, -1, velocity.Z)
+                        -- Hard brake in the final 5 studs to land instantly
+                        local slowFactor = math.max(0.05, distanceToGround / safeDistance)
+                        local dampedYVelocity = velocity.Y * slowFactor
+                        rootPart.Velocity = Vector3.new(velocity.X, dampedYVelocity, velocity.Z)
                     end
                 end
             end
