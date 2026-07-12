@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (5 FPS SKIP + JITTER)
+--  STEPPED ANIMATION FX (5 FPS SKIP + JITTER) - FIXED TOGGLE
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -13,38 +13,35 @@ local EffectEnabled = false
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
 
--- Speed Controller (Maintains normal walk speed logic)
+-- Speed Controller
 local function forceSpeed(hum)
     hum.WalkSpeed = 16 * CurrentSpeed
 end
 
--- Stepped FX: STRICT 5FPS GRID (No slow-mo)
+-- Stepped FX: Now respects the toggle state strictly
 local function stepAnimationTrack(track)
-    if hijackedTracks[track] then return end
-    hijackedTracks[track] = true
-
+    -- We track the connection so we don't duplicate it
     local lastGridSnap = 0
     
     local connection
     connection = RunService.Heartbeat:Connect(function()
+        -- Cleanup if track stops
         if not track or not track.IsPlaying then
-            hijackedTracks[track] = nil
             connection:Disconnect()
             return
         end
 
+        -- Only run logic if the effect is explicitly toggled ON
         if EffectEnabled then
-            -- Force the animation to snap to a 5 FPS grid
             local now = os.clock()
             if now - lastGridSnap >= FRAME_DURATION then
-                -- Apply small random jitter to the frame snap
                 local jitter = (math.random() - 0.5) * 0.04
                 track.TimePosition = track.TimePosition + jitter
                 lastGridSnap = now
             end
-            -- Note: We do NOT use AdjustSpeed here, 
-            -- letting the animation play at its native speed
         end
+        -- If EffectEnabled is false, this loop does nothing, 
+        -- letting the animation play normally.
     end)
 end
 
@@ -52,10 +49,12 @@ end
 local function hookHumanoid(hum)
     local animator = hum:FindFirstChildOfClass("Animator")
     if not animator then return end
+    
     animator.AnimationPlayed:Connect(stepAnimationTrack)
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
         stepAnimationTrack(track)
     end
+    
     hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function() forceSpeed(hum) end)
     forceSpeed(hum)
 end
