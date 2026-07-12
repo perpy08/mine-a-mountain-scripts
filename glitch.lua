@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + VELOCITY-BASED SPEED CONTROLLER
+--  STEPPED ANIMATION FX (12 FPS) + ABSOLUTE SPEED CONTROL
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -13,25 +13,30 @@ local EffectEnabled = false
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
 
--- Velocity Controller: Cap the character's velocity so they move slower
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-        local root = char.HumanoidRootPart
-        local hum = char.Humanoid
-        
-        -- Override speed via Velocity capping (this works even if game resets WalkSpeed)
-        if hum.MoveDirection.Magnitude > 0 then
-            local currentVel = root.Velocity
-            local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
-            
-            if horizontalVel.Magnitude > (16 * CurrentSpeed) then
-                root.Velocity = (horizontalVel.Unit * (16 * CurrentSpeed)) + Vector3.new(0, currentVel.Y, 0)
-            end
-        end
-    end
-end)
+-- Absolute Speed Control: Force the game to accept our speed
+local function forceSpeed(hum)
+    hum.WalkSpeed = 16 * CurrentSpeed
+end
 
+local function watchHumanoid(hum)
+    hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if hum.WalkSpeed ~= (16 * CurrentSpeed) then
+            forceSpeed(hum)
+        end
+    end)
+    forceSpeed(hum)
+end
+
+-- Hook into character setup
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then watchHumanoid(hum) end
+end)
+if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+    watchHumanoid(LocalPlayer.Character.Humanoid)
+end
+
+-- Stepped FX Logic
 local function stepAnimationTrack(track)
     if hijackedTracks[track] then return end
     hijackedTracks[track] = true
@@ -69,13 +74,8 @@ local function hookHumanoid(humanoid)
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if hum then hookHumanoid(hum) end
-end)
-if LocalPlayer.Character then
-    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-    if hum then hookHumanoid(hum) end
+if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+    hookHumanoid(LocalPlayer.Character.Humanoid)
 end
 
 -- =====================================================================
@@ -95,20 +95,25 @@ ToggleButton.MouseButton1Click:Connect(function()
     ToggleButton.BackgroundColor3 = EffectEnabled and Color3.fromRGB(60, 110, 60) or Color3.fromRGB(110, 60, 60)
 end)
 
-local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed: 1.0"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
+local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed: 1.0x"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
 local SliderBg = Instance.new("Frame", MainFrame); SliderBg.Size = UDim2.new(0.85, 0, 0, 6); SliderBg.Position = UDim2.new(0.075, 0, 0.75, 0); SliderBg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 3)
 
 local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(1, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
 Instance.new("UICorner", SliderBtn).CornerRadius = UDim.new(1, 0)
 
+-- Mapping: Leftmost is 0.25, Rightmost is 1.0
 local function updateSpeed(rel)
-    local raw = 0.3 + (rel * 0.7)
-    CurrentSpeed = math.floor((raw * 10) + 0.5) / 10
+    CurrentSpeed = 0.25 + (rel * 0.75)
+    CurrentSpeed = math.floor((CurrentSpeed * 4) + 0.5) / 4 -- Snaps to 0.25, 0.5, 0.75, 1.0
     
-    local snappedRel = (CurrentSpeed - 0.3) / 0.7
+    local snappedRel = (CurrentSpeed - 0.25) / 0.75
     SliderBtn.Position = UDim2.new(snappedRel, -7, 0.5, -7)
-    SliderLabel.Text = "Walk Speed: " .. string.format("%.1f", CurrentSpeed)
+    SliderLabel.Text = "Walk Speed: " .. string.format("%.2f", CurrentSpeed) .. "x"
+    
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        forceSpeed(LocalPlayer.Character.Humanoid)
+    end
 end
 
 local isDragging = false
