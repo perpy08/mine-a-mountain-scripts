@@ -27,6 +27,7 @@ local ProfileSettings = {
 
 local maxBonusJumps = 10
 local jumpCount = 0
+local spaceHeld = false  -- Track if space is currently held down
 
 -- internal helper mapping for current speed (keeps parity with ProfileSettings)
 local function getCurrentSpeed()
@@ -141,6 +142,17 @@ RunService.Heartbeat:Connect(function()
             if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
                 hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             end
+        end
+    end
+    
+    -- Continuous multi-jump hold effect
+    if ProfileSettings.MultiJumpActive and spaceHeld then
+        local char = LocalPlayer.Character
+        local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            -- Apply continuous upward velocity while space is held
+            local currentVelocity = rootPart.Velocity
+            rootPart.Velocity = Vector3.new(currentVelocity.X, 50, currentVelocity.Z)
         end
     end
 end)
@@ -259,22 +271,18 @@ end
 if LocalPlayer and LocalPlayer.Character then ManageCharacter(LocalPlayer.Character) end
 if LocalPlayer then LocalPlayer.CharacterAdded:Connect(ManageCharacter) end
 
+-- Space key input handling for multi-jump
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
     if input.KeyCode == Enum.KeyCode.Space and ProfileSettings.MultiJumpActive then
-        local character = LocalPlayer.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        spaceHeld = true
+        jumpCount = jumpCount + 1  -- Increment jump count on key press
+    end
+end)
 
-        if humanoid and rootPart then
-            local state = humanoid:GetState()
-            if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
-                if jumpCount < maxBonusJumps then
-                    jumpCount = jumpCount + 1
-                    rootPart.Velocity = Vector3.new(rootPart.Velocity.X, humanoid.JumpPower, rootPart.Velocity.Z)
-                end
-            end
-        end
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Space then
+        spaceHeld = false  -- Space released
     end
 end)
 
