@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + PERSISTENT SPEED CONTROLLER
+--  STEPPED ANIMATION FX (12 FPS) + VELOCITY-BASED SPEED CONTROLLER
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -13,13 +13,21 @@ local EffectEnabled = false
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
 
--- Persistence Loop: Force WalkSpeed every frame so the game can't reset it
+-- Velocity Controller: Cap the character's velocity so they move slower
 RunService.Heartbeat:Connect(function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        local hum = LocalPlayer.Character.Humanoid
-        local targetSpeed = 16 * CurrentSpeed
-        if math.abs(hum.WalkSpeed - targetSpeed) > 0.1 then
-            hum.WalkSpeed = targetSpeed
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+        local root = char.HumanoidRootPart
+        local hum = char.Humanoid
+        
+        -- Override speed via Velocity capping (this works even if game resets WalkSpeed)
+        if hum.MoveDirection.Magnitude > 0 then
+            local currentVel = root.Velocity
+            local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
+            
+            if horizontalVel.Magnitude > (16 * CurrentSpeed) then
+                root.Velocity = (horizontalVel.Unit * (16 * CurrentSpeed)) + Vector3.new(0, currentVel.Y, 0)
+            end
         end
     end
 end)
@@ -94,7 +102,6 @@ Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 3)
 local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(1, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
 Instance.new("UICorner", SliderBtn).CornerRadius = UDim.new(1, 0)
 
--- Accurate Snapping Logic
 local function updateSpeed(rel)
     local raw = 0.3 + (rel * 0.7)
     CurrentSpeed = math.floor((raw * 10) + 0.5) / 10
