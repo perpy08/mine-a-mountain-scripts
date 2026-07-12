@@ -120,7 +120,9 @@ RunService.Heartbeat:Connect(function()
     if ProfileSettings.NoDamageActive then
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health > 0 and hum.Health < hum.MaxHealth then
+        if hum and hum.Health > 0 then
+            -- Always restore health to max when No Damage is active
+            -- This prevents damage from accumulating faster than healing
             hum.Health = hum.MaxHealth
         end
     end
