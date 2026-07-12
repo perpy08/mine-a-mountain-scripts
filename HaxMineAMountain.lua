@@ -139,8 +139,18 @@ RunService.Heartbeat:Connect(function()
             end
             -- Force humanoid state to Standing/Running to prevent ragdoll states
             local state = hum:GetState()
-            if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
-                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Flying then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+            
+            -- Also force all body parts to not be massless (prevents physics ragdoll)
+            local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
+                    end
+                end
             end
         end
     end
@@ -149,10 +159,15 @@ RunService.Heartbeat:Connect(function()
     if ProfileSettings.MultiJumpActive and spaceHeld then
         local char = LocalPlayer.Character
         local rootPart = char and char:FindFirstChild("HumanoidRootPart")
-        if rootPart then
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if rootPart and hum then
             -- Apply continuous upward velocity while space is held
             local currentVelocity = rootPart.Velocity
             rootPart.Velocity = Vector3.new(currentVelocity.X, 50, currentVelocity.Z)
+            
+            -- Force upright orientation to prevent ragdoll rotation
+            local cf = rootPart.CFrame
+            rootPart.CFrame = CFrame.new(cf.Position, cf.Position + Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z))
         end
     end
 end)
