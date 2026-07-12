@@ -149,7 +149,7 @@ RunService.Heartbeat:Connect(function()
                 
                 if rayResult then
                     local distanceToGround = (rayResult.Position - rayOrigin).Magnitude
-                    local safeDistance = 2  -- Only slow down in the last 2 studs
+                    local safeDistance = 3.5  -- Only slow down in the last 3.5 studs
                     
                     -- If very close to ground, hard brake
                     if distanceToGround < safeDistance then
