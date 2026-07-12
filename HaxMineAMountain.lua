@@ -126,6 +126,23 @@ RunService.Heartbeat:Connect(function()
             hum.Health = hum.MaxHealth
         end
     end
+    
+    -- Continuous ragdoll prevention (runs every frame for reliability)
+    if ProfileSettings.NoRagdollActive then
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            -- Disable PlatformStand to prevent ragdoll
+            if hum.PlatformStand then
+                hum.PlatformStand = false
+            end
+            -- Force humanoid state to Standing/Running to prevent ragdoll states
+            local state = hum:GetState()
+            if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end
+    end
 end)
 
 ProximityPromptService.PromptShown:Connect(function(prompt)
@@ -221,18 +238,8 @@ local function ManageCharacter(character)
     end)
     humanoid.WalkSpeed = 16 * ProfileSettings.CurrentSpeedMultiplier
 
-    local platformConnection
-    platformConnection = humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
-        if ProfileSettings.NoRagdollActive and humanoid.PlatformStand then
-            humanoid.PlatformStand = false
-        end
-    end)
-
     local stateConnection
     stateConnection = humanoid.StateChanged:Connect(function(_, newState)
-        if ProfileSettings.NoRagdollActive and (newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.Ragdoll or newState == Enum.HumanoidStateType.FallingDown) then
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
         if newState == Enum.HumanoidStateType.Landed then
             jumpCount = 0
         end
@@ -245,7 +252,6 @@ local function ManageCharacter(character)
 
     humanoid.Died:Connect(function()
         if speedConnection then speedConnection:Disconnect() end
-        if platformConnection then platformConnection:Disconnect() end
         if stateConnection then stateConnection:Disconnect() end
     end)
 end
