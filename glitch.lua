@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + FRAME SKIPPING + JITTER + GLITCH
+--  STEPPED ANIMATION FX (5 FPS SKIP + JITTER)
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -7,30 +7,24 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local STEPS_PER_SECOND = 12
-local STEP_INTERVAL = 1 / STEPS_PER_SECOND
+local FPS = 5
+local FRAME_DURATION = 1 / FPS
 local EffectEnabled = false 
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
 
--- Force Speed Logic
+-- Speed Controller (Maintains normal walk speed logic)
 local function forceSpeed(hum)
     hum.WalkSpeed = 16 * CurrentSpeed
 end
 
-local function watchHumanoid(hum)
-    hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        if hum.WalkSpeed ~= (16 * CurrentSpeed) then forceSpeed(hum) end
-    end)
-    forceSpeed(hum)
-end
-
--- Stepped FX: Now uses frame-skipping by jumping TimePosition
+-- Stepped FX: STRICT 5FPS GRID (No slow-mo)
 local function stepAnimationTrack(track)
     if hijackedTracks[track] then return end
     hijackedTracks[track] = true
 
-    local lastJump = 0
+    local lastGridSnap = 0
+    
     local connection
     connection = RunService.Heartbeat:Connect(function()
         if not track or not track.IsPlaying then
@@ -40,38 +34,38 @@ local function stepAnimationTrack(track)
         end
 
         if EffectEnabled then
-            -- FRAME SKIPPING LOGIC:
-            -- We let it play for the interval, then snap to a new time
-            if os.clock() - lastJump >= STEP_INTERVAL then
-                -- Add Jitter + Random Skip
-                local skip = (math.random() * 0.1) -- Random forward skip
-                local jitter = (math.random() - 0.5) * 0.08 -- Random position shift
-                
-                track.TimePosition = track.TimePosition + skip + jitter
-                lastJump = os.clock()
-                
-                -- Randomly "glitch" the animation back a few frames
-                if math.random() > 0.9 then
-                    track.TimePosition = math.max(0, track.TimePosition - 0.2)
-                end
+            -- Force the animation to snap to a 5 FPS grid
+            local now = os.clock()
+            if now - lastGridSnap >= FRAME_DURATION then
+                -- Apply small random jitter to the frame snap
+                local jitter = (math.random() - 0.5) * 0.04
+                track.TimePosition = track.TimePosition + jitter
+                lastGridSnap = now
             end
-            track:AdjustSpeed(CurrentSpeed)
-        else
-            track:AdjustSpeed(1)
+            -- Note: We do NOT use AdjustSpeed here, 
+            -- letting the animation play at its native speed
         end
     end)
 end
 
--- Setup
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if hum then watchHumanoid(hum) end
-end)
-if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-    watchHumanoid(LocalPlayer.Character.Humanoid)
-    for _, track in ipairs(LocalPlayer.Character.Humanoid:FindFirstChildOfClass("Animator"):GetPlayingAnimationTracks()) do
+-- Hook into Humanoid
+local function hookHumanoid(hum)
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
+    animator.AnimationPlayed:Connect(stepAnimationTrack)
+    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
         stepAnimationTrack(track)
     end
+    hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function() forceSpeed(hum) end)
+    forceSpeed(hum)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then hookHumanoid(hum) end
+end)
+if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+    hookHumanoid(LocalPlayer.Character.Humanoid)
 end
 
 -- =====================================================================
