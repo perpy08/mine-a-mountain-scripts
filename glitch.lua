@@ -1,5 +1,5 @@
 -- =====================================================================
--- STEPPED ANIMATION FX (12 FPS) - INTERCEPT METHOD
+--  STEPPED ANIMATION FX (12 FPS) - INITIALIZED OFF
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -9,7 +9,8 @@ local LocalPlayer = Players.LocalPlayer
 
 local STEPS_PER_SECOND = 12
 local STEP_INTERVAL = 1 / STEPS_PER_SECOND
-local EffectEnabled = true
+-- Defaulted to false as requested
+local EffectEnabled = false 
 local hijackedTracks = {}
 
 local function stepAnimationTrack(track)
@@ -17,10 +18,8 @@ local function stepAnimationTrack(track)
     hijackedTracks[track] = true
 
     local nextUpdate = 0
-    local isFrozen = false
-
     local connection
-    connection = RunService.Heartbeat:Connect(function(dt)
+    connection = RunService.Heartbeat:Connect(function()
         if not track or not track.IsPlaying then
             hijackedTracks[track] = nil
             connection:Disconnect()
@@ -28,16 +27,16 @@ local function stepAnimationTrack(track)
         end
 
         if EffectEnabled then
-            -- We toggle the weight to "pause" the engine's internal update
-            -- This keeps the pose but stops it from interpolating smoothly
+            -- "12fps" logic: Update only when interval is reached
             if os.clock() >= nextUpdate then
-                track:AdjustWeight(1, 0) -- Unfreeze
+                track:AdjustSpeed(1) -- Move
                 nextUpdate = os.clock() + STEP_INTERVAL
             else
-                track:AdjustWeight(0, 0) -- Freeze
+                track:AdjustSpeed(0) -- Freeze pose
             end
         else
-            track:AdjustWeight(1, 0) -- Normal playback
+            -- Ensure effect is fully disabled by returning speed to normal
+            track:AdjustSpeed(1)
         end
     end)
 end
@@ -60,14 +59,22 @@ if LocalPlayer.Character then
     if hum then hookHumanoid(hum) end
 end
 
--- GUI remains same
+-- =====================================================================
+--  GUI
+-- =====================================================================
+
 local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
 local MainFrame = Instance.new("Frame", ScreenGui); MainFrame.Size = UDim2.new(0, 220, 0, 90); MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0); MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); MainFrame.Active = true; MainFrame.Draggable = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
-local ToggleButton = Instance.new("TextButton", MainFrame); ToggleButton.Size = UDim2.new(0.85, 0, 0, 36); ToggleButton.Position = UDim2.new(0.075, 0, 0.3, 0); ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 110, 60); ToggleButton.Text = "Stepped FX: ON"; ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+
+-- Initialized to OFF state
+local ToggleButton = Instance.new("TextButton", MainFrame); ToggleButton.Size = UDim2.new(0.85, 0, 0, 36); ToggleButton.Position = UDim2.new(0.075, 0, 0.3, 0); ToggleButton.BackgroundColor3 = Color3.fromRGB(110, 60, 60); ToggleButton.Text = "Stepped FX: OFF"; ToggleButton.TextColor3 = Color3.new(1, 1, 1)
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 4)
+
 ToggleButton.MouseButton1Click:Connect(function()
     EffectEnabled = not EffectEnabled
     ToggleButton.Text = EffectEnabled and "Stepped FX: ON" or "Stepped FX: OFF"
     ToggleButton.BackgroundColor3 = EffectEnabled and Color3.fromRGB(60, 110, 60) or Color3.fromRGB(110, 60, 60)
 end)
+
+UserInputService.InputBegan:Connect(function(i, g) if not g and i.KeyCode == Enum.KeyCode.Insert then MainFrame.Visible = not MainFrame.Visible end end)
