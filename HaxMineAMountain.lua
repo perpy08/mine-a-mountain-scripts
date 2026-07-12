@@ -1,5 +1,5 @@
 -- =====================================================================
---  MINE A MOUNTAIN: INTEGRATED PANEL (EXPLOITS | MISC)
+--  MINE A MOUNTAIN: INTEGRATED PANEL (FIXED)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -27,7 +27,7 @@ local maxBonusJumps = 10
 local jumpCount = 0
 
 -- ---------------------------------------------------------------------
---  1. ESP & CORE LOGIC (KEEPING ORIGINAL)
+--  1. ESP & CORE LOGIC
 -- ---------------------------------------------------------------------
 local function createESP(player)
     if player == LocalPlayer then return end
@@ -68,7 +68,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- 2. AUTOMATION & CORE (RETAINED)
+-- 2. AUTOMATION & CORE
 local BUY_BOMB_REMOTE = nil
 local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events") or ReplicatedStorage
 BUY_BOMB_REMOTE = remotesFolder:FindFirstChild("BuyBomb") or remotesFolder:FindFirstChild("PurchaseBomb")
@@ -118,28 +118,40 @@ UserInputService.InputBegan:Connect(function(input, g)
 end)
 
 -- ---------------------------------------------------------------------
---  3. MISC: EXTREME LAG FX LOGIC
+--  3. MISC: EXTREME LAG FX (FIXED)
 -- ---------------------------------------------------------------------
 local function applyLagEffect(track)
+    if not track or not track.Parent then return end
     local lastUpdate = 0
-    RunService.Heartbeat:Connect(function()
-        if not track or not track.IsPlaying then return end
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not track or not track.Parent or not track.IsPlaying then
+            if connection then connection:Disconnect() end
+            return
+        end
         if ProfileSettings.LagFXActive then
             track:AdjustSpeed(0)
-            if os.clock() - lastUpdate >= (1/3) then
-                track.TimePosition += (0.15 + (math.random() * 0.1))
+            if os.clock() - lastUpdate >= 0.33 then
+                pcall(function() track.TimePosition += (0.15 + (math.random() * 0.1)) end)
                 lastUpdate = os.clock()
             end
         else
-            track:AdjustSpeed(ProfileSettings.CurrentSpeedMultiplier)
+            if track.Speed == 0 then track:AdjustSpeed(ProfileSettings.CurrentSpeedMultiplier) end
         end
     end)
 end
 
-LocalPlayer.CharacterAdded:Connect(function(c)
-    local anim = c:WaitForChild("Humanoid"):FindFirstChildOfClass("Animator")
-    anim.AnimationPlayed:Connect(applyLagEffect)
-end)
+local function connectAnimator(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    local anim = hum and hum:FindFirstChildOfClass("Animator")
+    if anim then
+        anim.AnimationPlayed:Connect(applyLagEffect)
+        for _, track in ipairs(anim:GetPlayingAnimationTracks()) do applyLagEffect(track) end
+    end
+end
+
+if LocalPlayer.Character then connectAnimator(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(connectAnimator)
 
 -- ---------------------------------------------------------------------
 --  4. TABBED GUI
@@ -150,7 +162,6 @@ local MainFrame = Instance.new("Frame", ScreenGui); MainFrame.Size = UDim2.new(0
 local TabContainer = Instance.new("Frame", MainFrame); TabContainer.Size = UDim2.new(1, 0, 0, 40); TabContainer.BackgroundTransparency = 1
 local ExpTab = Instance.new("TextButton", TabContainer); ExpTab.Size = UDim2.new(0.5, 0, 1, 0); ExpTab.Text = "Exploits"; ExpTab.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 local MiscTab = Instance.new("TextButton", TabContainer); MiscTab.Size = UDim2.new(0.5, 0, 1, 0); MiscTab.Position = UDim2.new(0.5, 0, 0, 0); MiscTab.Text = "Misc"; MiscTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-
 local Content = Instance.new("ScrollingFrame", MainFrame); Content.Size = UDim2.new(1, 0, 1, -40); Content.Position = UDim2.new(0, 0, 0, 40); Content.BackgroundTransparency = 1; Content.CanvasSize = UDim2.new(0, 0, 0, 600)
 
 local function clear() for _,v in pairs(Content:GetChildren()) do v:Destroy() end end
