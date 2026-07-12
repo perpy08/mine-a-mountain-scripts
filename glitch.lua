@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + GLITCHES + SNAPPING SPEED SLIDER
+--  STEPPED ANIMATION FX (12 FPS) + PERSISTENT SPEED CONTROLLER
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -12,6 +12,17 @@ local STEP_INTERVAL = 1 / STEPS_PER_SECOND
 local EffectEnabled = false 
 local CurrentSpeed = 1.0
 local hijackedTracks = {}
+
+-- Persistence Loop: Force WalkSpeed every frame so the game can't reset it
+RunService.Heartbeat:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        local hum = LocalPlayer.Character.Humanoid
+        local targetSpeed = 16 * CurrentSpeed
+        if math.abs(hum.WalkSpeed - targetSpeed) > 0.1 then
+            hum.WalkSpeed = targetSpeed
+        end
+    end
+end)
 
 local function stepAnimationTrack(track)
     if hijackedTracks[track] then return end
@@ -36,7 +47,7 @@ local function stepAnimationTrack(track)
                 track:AdjustSpeed(0)
             end
         else
-            track:AdjustSpeed(CurrentSpeed)
+            track:AdjustSpeed(1)
         end
     end)
 end
@@ -83,21 +94,14 @@ Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 3)
 local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(1, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
 Instance.new("UICorner", SliderBtn).CornerRadius = UDim.new(1, 0)
 
+-- Accurate Snapping Logic
 local function updateSpeed(rel)
-    -- Snap to nearest 0.1 between 0.3 and 1.0
     local raw = 0.3 + (rel * 0.7)
-    local snapped = math.floor((raw * 10) + 0.5) / 10
-    CurrentSpeed = math.clamp(snapped, 0.3, 1.0)
+    CurrentSpeed = math.floor((raw * 10) + 0.5) / 10
     
-    -- Visual update
-    SliderLabel.Text = "Walk Speed: " .. string.format("%.1f", CurrentSpeed)
     local snappedRel = (CurrentSpeed - 0.3) / 0.7
     SliderBtn.Position = UDim2.new(snappedRel, -7, 0.5, -7)
-    
-    -- Apply to humanoid
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = 16 * CurrentSpeed
-    end
+    SliderLabel.Text = "Walk Speed: " .. string.format("%.1f", CurrentSpeed)
 end
 
 local isDragging = false
