@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) + GLITCHES + SPEED SLIDER
+--  STEPPED ANIMATION FX (12 FPS) + GLITCHES + SNAPPING SPEED SLIDER
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -28,10 +28,8 @@ local function stepAnimationTrack(track)
 
         if EffectEnabled then
             if os.clock() >= nextUpdate then
-                -- Apply slight "jitter" glitch by randomly offsetting TimePosition
                 local jitter = (math.random() - 0.5) * 0.05
                 track.TimePosition = math.max(0, track.TimePosition + jitter)
-                
                 track:AdjustSpeed(CurrentSpeed)
                 nextUpdate = os.clock() + STEP_INTERVAL
             else
@@ -69,7 +67,6 @@ local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"
 local MainFrame = Instance.new("Frame", ScreenGui); MainFrame.Size = UDim2.new(0, 220, 0, 140); MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0); MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); MainFrame.Active = true; MainFrame.Draggable = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Toggle
 local ToggleButton = Instance.new("TextButton", MainFrame); ToggleButton.Size = UDim2.new(0.85, 0, 0, 36); ToggleButton.Position = UDim2.new(0.075, 0, 0.1, 0); ToggleButton.BackgroundColor3 = Color3.fromRGB(110, 60, 60); ToggleButton.Text = "Stepped FX: OFF"; ToggleButton.TextColor3 = Color3.new(1, 1, 1)
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 4)
 
@@ -79,13 +76,29 @@ ToggleButton.MouseButton1Click:Connect(function()
     ToggleButton.BackgroundColor3 = EffectEnabled and Color3.fromRGB(60, 110, 60) or Color3.fromRGB(110, 60, 60)
 end)
 
--- Slider
-local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
+local SliderLabel = Instance.new("TextLabel", MainFrame); SliderLabel.Size = UDim2.new(1, 0, 0, 20); SliderLabel.Position = UDim2.new(0, 0, 0.55, 0); SliderLabel.Text = "Walk Speed: 1.0"; SliderLabel.TextColor3 = Color3.new(1, 1, 1); SliderLabel.BackgroundTransparency = 1; SliderLabel.Font = Enum.Font.SourceSans; SliderLabel.TextSize = 12
 local SliderBg = Instance.new("Frame", MainFrame); SliderBg.Size = UDim2.new(0.85, 0, 0, 6); SliderBg.Position = UDim2.new(0.075, 0, 0.75, 0); SliderBg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 3)
 
-local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(0.85, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
+local SliderBtn = Instance.new("TextButton", SliderBg); SliderBtn.Size = UDim2.new(0, 14, 0, 14); SliderBtn.Position = UDim2.new(1, -7, 0.5, -7); SliderBtn.BackgroundColor3 = Color3.new(1, 1, 1); SliderBtn.Text = ""
 Instance.new("UICorner", SliderBtn).CornerRadius = UDim.new(1, 0)
+
+local function updateSpeed(rel)
+    -- Snap to nearest 0.1 between 0.3 and 1.0
+    local raw = 0.3 + (rel * 0.7)
+    local snapped = math.floor((raw * 10) + 0.5) / 10
+    CurrentSpeed = math.clamp(snapped, 0.3, 1.0)
+    
+    -- Visual update
+    SliderLabel.Text = "Walk Speed: " .. string.format("%.1f", CurrentSpeed)
+    local snappedRel = (CurrentSpeed - 0.3) / 0.7
+    SliderBtn.Position = UDim2.new(snappedRel, -7, 0.5, -7)
+    
+    -- Apply to humanoid
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = 16 * CurrentSpeed
+    end
+end
 
 local isDragging = false
 SliderBtn.MouseButton1Down:Connect(function() isDragging = true end)
@@ -93,11 +106,7 @@ UserInputService.InputEnded:Connect(function(input) if input.UserInputType == En
 UserInputService.InputChanged:Connect(function(input)
     if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
         local rel = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
-        SliderBtn.Position = UDim2.new(rel, -7, 0.5, -7)
-        CurrentSpeed = 0.3 + (rel * 0.7)
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.WalkSpeed = 16 * CurrentSpeed
-        end
+        updateSpeed(rel)
     end
 end)
 
