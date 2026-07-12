@@ -149,12 +149,12 @@ RunService.Heartbeat:Connect(function()
                 
                 if rayResult then
                     local distanceToGround = (rayResult.Position - rayOrigin).Magnitude
-                    local safeDistance = 15  -- Safe fall distance to avoid damage/ragdoll
+                    local safeDistance = 5  -- Only slow down in the last 5 studs
                     
-                    -- If close to ground, dampen the fall speed
+                    -- If very close to ground, dampen the fall speed aggressively
                     if distanceToGround < safeDistance then
-                        -- Slow down smoothly as you approach ground
-                        local slowFactor = math.max(0.1, distanceToGround / safeDistance)
+                        -- Hard brake in the final 5 studs to land instantly
+                        local slowFactor = math.max(0.05, distanceToGround / safeDistance)
                         local dampedYVelocity = velocity.Y * slowFactor
                         rootPart.Velocity = Vector3.new(velocity.X, dampedYVelocity, velocity.Z)
                     end
