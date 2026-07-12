@@ -9,6 +9,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -128,27 +129,34 @@ RunService.Heartbeat:Connect(function()
         end
     end
     
-    -- Continuous ragdoll prevention (runs every frame for reliability)
+    -- Auto fall dampening when No Ragdoll is enabled
     if ProfileSettings.NoRagdollActive then
         local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            -- Disable PlatformStand to prevent ragdoll
-            if hum.PlatformStand then
-                hum.PlatformStand = false
-            end
-            -- Force humanoid state to Standing/Running to prevent ragdoll states
-            local state = hum:GetState()
-            if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Flying then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
+        local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local velocity = rootPart.Velocity
             
-            -- Also force all body parts to not be massless (prevents physics ragdoll)
-            local rootPart = char and char:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
+            -- Check if falling (negative Y velocity)
+            if velocity.Y < 0 then
+                -- Raycast downward to find ground
+                local rayOrigin = rootPart.Position
+                local rayDirection = Vector3.new(0, -1, 0)
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                raycastParams.FilterDescendantsInstances = {char}
+                
+                local rayResult = Workspace:Raycast(rayOrigin, rayDirection * 500, raycastParams)
+                
+                if rayResult then
+                    local distanceToGround = (rayResult.Position - rayOrigin).Magnitude
+                    local safeDistance = 15  -- Safe fall distance to avoid damage/ragdoll
+                    
+                    -- If close to ground, dampen the fall speed
+                    if distanceToGround < safeDistance then
+                        -- Slow down smoothly as you approach ground
+                        local slowFactor = math.max(0.1, distanceToGround / safeDistance)
+                        local dampedYVelocity = velocity.Y * slowFactor
+                        rootPart.Velocity = Vector3.new(velocity.X, dampedYVelocity, velocity.Z)
                     end
                 end
             end
@@ -164,10 +172,6 @@ RunService.Heartbeat:Connect(function()
             -- Apply continuous upward velocity while space is held
             local currentVelocity = rootPart.Velocity
             rootPart.Velocity = Vector3.new(currentVelocity.X, 50, currentVelocity.Z)
-            
-            -- Force upright orientation to prevent ragdoll rotation
-            local cf = rootPart.CFrame
-            rootPart.CFrame = CFrame.new(cf.Position, cf.Position + Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z))
         end
     end
 end)
