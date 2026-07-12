@@ -1,5 +1,5 @@
 -- =====================================================================
---  STEPPED ANIMATION FX (12 FPS) - DEBUGGED VERSION
+--  STEPPED ANIMATION FX (12 FPS) - NON-DESTRUCTIVE VERSION
 -- =====================================================================
 
 local RunService = game:GetService("RunService")
@@ -12,23 +12,12 @@ local STEP_INTERVAL = 1 / STEPS_PER_SECOND
 local EffectEnabled = true
 local hijackedTracks = {}
 
--- 1. Helper: Disable Default Animate Script so it stops fighting us
-local function disableDefaultAnimate()
-    local char = LocalPlayer.Character
-    if char then
-        local animate = char:FindFirstChild("Animate")
-        if animate and animate:IsA("Script") then
-            animate.Disabled = true
-        end
-    end
-end
-
--- 2. Stepped Logic
+-- Stepped Logic
 local function stepAnimationTrack(track)
     if hijackedTracks[track] then return end
     hijackedTracks[track] = true
 
-    -- Force high priority so the engine doesn't overwrite our poses
+    -- We do NOT disable the Animate script. We just set our priority higher.
     pcall(function() track.Priority = Enum.AnimationPriority.Action4 end)
 
     local accumulatedTime = 0
@@ -45,12 +34,15 @@ local function stepAnimationTrack(track)
 
         if EffectEnabled then
             accumulatedTime = accumulatedTime + dt
+            
+            -- Only update the 'held' position at our 12fps interval
             if accumulatedTime - lastStepTime >= STEP_INTERVAL then
                 lastStepTime = accumulatedTime
                 heldPosition = track.TimePosition
             end
             
-            track:AdjustSpeed(0)
+            -- Set the track to play, but force the TimePosition to our 'stepped' value
+            track:AdjustSpeed(1) 
             track.TimePosition = heldPosition
         else
             track:AdjustSpeed(1)
@@ -58,7 +50,7 @@ local function stepAnimationTrack(track)
     end)
 end
 
--- 3. Hooking logic
+-- Hooking logic
 local function hookHumanoid(humanoid)
     local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator", 5)
     if not animator then return end
@@ -70,13 +62,11 @@ local function hookHumanoid(humanoid)
 end
 
 LocalPlayer.CharacterAdded:Connect(function(char)
-    disableDefaultAnimate()
     local hum = char:WaitForChild("Humanoid", 5)
     if hum then hookHumanoid(hum) end
 end)
 
 if LocalPlayer.Character then
-    disableDefaultAnimate()
     local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
     if hum then hookHumanoid(hum) end
 end
